@@ -32,6 +32,7 @@ model User {
   updatedAt   DateTime     @updatedAt
 
   submissions Submission[]
+  userExams   UserExam[]
 
   @@map("users")
 }
@@ -50,6 +51,7 @@ model Exam {
 
   questions   Question[]
   submissions Submission[]
+  userExams   UserExam[]
 
   @@map("exams")
 }
@@ -112,6 +114,26 @@ model Submission {
   @@index([userId])
   @@index([examId])
   @@map("submissions")
+}
+
+// ─────────────────────────────────────────
+// UserExam — 시험-사용자 매핑
+// 관리자가 특정 사용자에게 시험을 할당
+// isAssigned=false인 시험은 해당 유저에게 노출되지 않음
+// ─────────────────────────────────────────
+model UserExam {
+  id        String   @id @default(cuid())
+  userId    String
+  examId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, examId]) // 동일 유저-시험 중복 할당 방지
+  @@index([userId])
+  @@index([examId])
+  @@map("user_exams")
 }
 
 // ─────────────────────────────────────────

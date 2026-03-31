@@ -34,9 +34,14 @@ export const Navbar = () => {
                 <Button variant="ghost" size="sm">내 결과</Button>
               </Link>
               {user.role === 'ADMIN' && (
-                <Link href="/admin/exams">
-                  <Button variant="secondary" size="sm">관리자</Button>
-                </Link>
+                <>
+                  <Link href="/admin/exams">
+                    <Button variant="secondary" size="sm">시험 관리</Button>
+                  </Link>
+                  <Link href="/admin/users">
+                    <Button variant="secondary" size="sm">사용자 관리</Button>
+                  </Link>
+                </>
               )}
               <Button variant="secondary" size="sm" onClick={handleLogout}>
                 로그아웃

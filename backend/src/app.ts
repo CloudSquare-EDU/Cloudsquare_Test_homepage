@@ -10,6 +10,7 @@ import { authRoutes } from './routes/authRoutes';
 import { examRoutes } from './routes/examRoutes';
 import { questionRoutes } from './routes/questionRoutes';
 import { submissionRoutes } from './routes/submissionRoutes';
+import { userRoutes } from './routes/userRoutes';
 
 export const createApp = (): express.Application => {
   const app = express();
@@ -37,6 +38,7 @@ export const createApp = (): express.Application => {
   app.use('/exams', examRoutes);
   app.use('/questions', questionRoutes);
   app.use('/submissions', submissionRoutes);
+  app.use('/users', userRoutes);
 
   // ─── 404 핸들러 ────────────────────────────────────────────
   app.use((_req, res) => {

@@ -18,24 +18,29 @@ interface UpdateExamInput {
   duration?: number;
 }
 
-// 공개된 시험 목록 조회 (USER용)
-export const getPublishedExams = async () => {
-  const exams = await prisma.exam.findMany({
-    where: { isPublished: true },
-    orderBy: { createdAt: 'desc' },
+// 해당 사용자에게 할당된 공개 시험 목록 조회 (USER용)
+// UserExam 매핑이 없으면 빈 배열 반환
+export const getAssignedExamsForUser = async (userId: string) => {
+  const mappings = await prisma.userExam.findMany({
+    where: { userId },
     include: {
-      _count: { select: { questions: true } },
+      exam: {
+        include: { _count: { select: { questions: true } } },
+      },
     },
+    orderBy: { createdAt: 'desc' },
   });
 
-  return exams.map((exam) => ({
-    id: exam.id,
-    title: exam.title,
-    description: exam.description,
-    duration: exam.duration,
-    questionCount: exam._count.questions,
-    createdAt: exam.createdAt,
-  }));
+  return mappings
+    .filter((m) => m.exam.isPublished)
+    .map((m) => ({
+      id: m.exam.id,
+      title: m.exam.title,
+      description: m.exam.description,
+      duration: m.exam.duration,
+      questionCount: m.exam._count.questions,
+      createdAt: m.exam.createdAt,
+    }));
 };
 
 // 전체 시험 목록 (ADMIN용)
