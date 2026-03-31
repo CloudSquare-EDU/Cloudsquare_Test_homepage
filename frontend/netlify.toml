@@ -1,0 +1,16 @@
+# Netlify 배포 설정
+# 역할: Next.js 14 App Router 빌드 및 배포 설정
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Next.js on Netlify 플러그인 (자동 SSR 지원)
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# 환경 변수는 Netlify 대시보드에서 설정:
+# NEXT_PUBLIC_API_URL = https://your-backend.railway.app
