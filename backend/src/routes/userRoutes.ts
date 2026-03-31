@@ -13,6 +13,9 @@ userRoutes.get('/', authenticate, requireAdmin, userController.getAllUsers);
 // POST /users — 사용자 계정 직접 생성
 userRoutes.post('/', authenticate, requireAdmin, userController.createUser);
 
+// POST /users/bulk — 사용자 일괄 생성 (엑셀 업로드용)
+userRoutes.post('/bulk', authenticate, requireAdmin, userController.bulkCreateUsers);
+
 // PATCH /users/:id/role — role 변경 (USER ↔ ADMIN)
 userRoutes.patch('/:id/role', authenticate, requireAdmin, userController.updateUserRole);
 

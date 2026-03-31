@@ -56,6 +56,36 @@ export const updateQuestion = async (
   }
 };
 
+const bulkCreateSchema = z.object({
+  examId: z.string().min(1, 'examId가 필요합니다.'),
+  questions: z
+    .array(
+      z.object({
+        content: z.string().min(1, '문제 내용을 입력해주세요.'),
+        order: z.number().int().positive(),
+        choices: z
+          .array(choiceSchema)
+          .min(2, '선택지는 최소 2개 이상이어야 합니다.')
+          .max(5, '선택지는 최대 5개까지 가능합니다.'),
+      }),
+    )
+    .min(1, '최소 1개 이상의 문제가 필요합니다.'),
+});
+
+export const bulkCreateQuestions = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { examId, questions } = bulkCreateSchema.parse(req.body);
+    const result = await questionService.bulkCreateQuestions(examId, questions);
+    res.status(201).json({ success: true, data: result, count: result.length });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const deleteQuestion = async (
   req: AuthRequest,
   res: Response,

@@ -10,6 +10,9 @@ export const questionRoutes: Router = Router();
 // POST /questions — 문제 + 선택지 생성
 questionRoutes.post('/', authenticate, requireAdmin, questionController.createQuestion);
 
+// POST /questions/bulk — 문제 일괄 생성 (엑셀 업로드용)
+questionRoutes.post('/bulk', authenticate, requireAdmin, questionController.bulkCreateQuestions);
+
 // PATCH /questions/:id — 문제 수정
 questionRoutes.patch('/:id', authenticate, requireAdmin, questionController.updateQuestion);
 

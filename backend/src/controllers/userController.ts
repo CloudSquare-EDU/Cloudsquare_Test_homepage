@@ -66,6 +66,35 @@ export const updateUserRole = async (
   }
 };
 
+const bulkCreateUserSchema = z.object({
+  users: z
+    .array(
+      z.object({
+        email: z.string().email('유효한 이메일을 입력해주세요.'),
+        password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다.'),
+        name: z.string().min(1, '이름을 입력해주세요.'),
+        role: z.enum(['USER', 'ADMIN']).optional(),
+      }),
+    )
+    .min(1, '최소 1명 이상의 사용자가 필요합니다.'),
+});
+
+export const bulkCreateUsers = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { users } = bulkCreateUserSchema.parse(req.body);
+    const result = await userService.bulkCreateUsers(
+      users.map((u) => ({ ...u, role: u.role as Role | undefined })),
+    );
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const deleteUser = async (
   req: AuthRequest,
   res: Response,

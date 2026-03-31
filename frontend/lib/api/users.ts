@@ -19,6 +19,18 @@ export interface AssignedUser {
   role: 'USER' | 'ADMIN';
 }
 
+export interface BulkUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role?: 'USER' | 'ADMIN';
+}
+
+export interface BulkUserResult {
+  success: number;
+  failed: { email: string; reason: string }[];
+}
+
 export const usersApi = {
   // 전체 사용자 목록
   getAll: () => apiClient.get<UserSummary[]>('/users'),
@@ -26,6 +38,10 @@ export const usersApi = {
   // 사용자 직접 생성
   create: (data: { email: string; password: string; name: string; role?: 'USER' | 'ADMIN' }) =>
     apiClient.post<UserSummary>('/users', data),
+
+  // 사용자 일괄 생성 (엑셀 업로드용)
+  bulkCreate: (users: BulkUserInput[]) =>
+    apiClient.post<BulkUserResult>('/users/bulk', { users }),
 
   // role 변경
   updateRole: (userId: string, role: 'USER' | 'ADMIN') =>

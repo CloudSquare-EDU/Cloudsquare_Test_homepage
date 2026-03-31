@@ -3,14 +3,16 @@
 // 기능:
 // 1. 전체 사용자 목록 조회
 // 2. 사용자 계정 직접 생성 (이름, 이메일, 비밀번호, role 지정)
-// 3. role 변경 (USER ↔ ADMIN)
-// 4. 사용자별 시험 할당 관리 (모달에서 처리)
-// 5. 사용자 삭제
+// 3. 엑셀 파일로 사용자 일괄 생성
+// 4. role 변경 (USER ↔ ADMIN)
+// 5. 사용자별 시험 할당 관리 (모달에서 처리)
+// 6. 사용자 삭제
 
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
-import { usersApi, UserSummary, AssignedUser } from '@/lib/api/users';
+import { useEffect, useState, useRef, FormEvent } from 'react';
+import * as XLSX from 'xlsx';
+import { usersApi, UserSummary, AssignedUser, BulkUserInput } from '@/lib/api/users';
 import { examsApi } from '@/lib/api/exams';
 import { AdminExam } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -18,17 +20,33 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
 
+interface ExcelUserRow {
+  이름: string;
+  이메일: string;
+  '비밀번호(8자 이상)': string;
+  '권한(USER/ADMIN)': string;
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 사용자 생성 폼
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  // 사용자 생성 모드: 'single' | 'excel' | null
+  const [createMode, setCreateMode] = useState<'single' | 'excel' | null>(null);
+
+  // 개별 생성 폼
   const [createForm, setCreateForm] = useState({
     name: '', email: '', password: '', role: 'USER' as 'USER' | 'ADMIN',
   });
   const [isCreating, setIsCreating] = useState(false);
+
+  // 엑셀 일괄 생성
+  const [excelPreview, setExcelPreview] = useState<ExcelUserRow[]>([]);
+  const [excelError, setExcelError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ success: number; failed: { email: string; reason: string }[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 삭제 확인
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -50,15 +68,23 @@ export default function AdminUsersPage() {
 
   useEffect(() => { loadUsers(); }, []);
 
-  // 사용자 생성
+  const resetCreateMode = () => {
+    setCreateMode(null);
+    setCreateForm({ name: '', email: '', password: '', role: 'USER' });
+    setExcelPreview([]);
+    setExcelError(null);
+    setUploadResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // ───── 개별 사용자 생성 ─────
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
     setError(null);
     try {
       await usersApi.create(createForm);
-      setShowCreateForm(false);
-      setCreateForm({ name: '', email: '', password: '', role: 'USER' });
+      resetCreateMode();
       loadUsers();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '생성 중 오류가 발생했습니다.');
@@ -67,7 +93,69 @@ export default function AdminUsersPage() {
     }
   };
 
-  // role 변경
+  // ───── 엑셀 파싱 ─────
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setExcelError(null);
+    setExcelPreview([]);
+    setUploadResult(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = ev.target?.result;
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets['사용자목록'];
+        if (!ws) { setExcelError("'사용자목록' 시트를 찾을 수 없습니다. 샘플 파일 형식을 확인해주세요."); return; }
+
+        const rows = XLSX.utils.sheet_to_json<ExcelUserRow>(ws);
+        if (rows.length === 0) { setExcelError('데이터가 없습니다. 최소 1명 이상 입력해주세요.'); return; }
+
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r['이름']?.toString().trim()) { setExcelError(`${i + 2}행: 이름이 비어있습니다.`); return; }
+          if (!r['이메일']?.toString().trim()) { setExcelError(`${i + 2}행: 이메일이 비어있습니다.`); return; }
+          const pw = r['비밀번호(8자 이상)']?.toString();
+          if (!pw || pw.length < 8) { setExcelError(`${i + 2}행: 비밀번호는 8자 이상이어야 합니다.`); return; }
+          const role = r['권한(USER/ADMIN)']?.toString().toUpperCase();
+          if (!['USER', 'ADMIN'].includes(role)) { setExcelError(`${i + 2}행: 권한은 USER 또는 ADMIN이어야 합니다.`); return; }
+        }
+
+        setExcelPreview(rows);
+      } catch {
+        setExcelError('파일을 읽는 중 오류가 발생했습니다. 올바른 .xlsx 파일인지 확인해주세요.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleExcelUpload = async () => {
+    if (excelPreview.length === 0) return;
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const users: BulkUserInput[] = excelPreview.map((r) => ({
+        name: r['이름'].toString().trim(),
+        email: r['이메일'].toString().trim(),
+        password: r['비밀번호(8자 이상)'].toString(),
+        role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
+      }));
+
+      const result = await usersApi.bulkCreate(users);
+      setUploadResult(result);
+      setExcelPreview([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ───── role 변경 ─────
   const handleRoleChange = async (userId: string, currentRole: 'USER' | 'ADMIN') => {
     const newRole = currentRole === 'USER' ? 'ADMIN' : 'USER';
     try {
@@ -78,7 +166,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  // 사용자 삭제
+  // ───── 사용자 삭제 ─────
   const handleDelete = async () => {
     if (!deleteTargetId) return;
     setIsDeleting(true);
@@ -93,22 +181,18 @@ export default function AdminUsersPage() {
     }
   };
 
-  // 시험 할당 모달 열기
+  // ───── 시험 할당 모달 ─────
   const openAssignModal = async (user: UserSummary) => {
     setAssignTarget(user);
     setIsLoadingExams(true);
     try {
-      const [exams, assigned] = await Promise.all([
-        examsApi.getAllAdmin(),
-        usersApi.getByExam('').catch(() => [] as AssignedUser[]),
-      ]);
+      const exams = await examsApi.getAllAdmin();
       setAllExams(exams);
-      // 이 사용자에게 할당된 시험 ID 계산
       const assignedIds = new Set<string>();
       for (const exam of exams) {
         try {
           const assignedUsers = await usersApi.getByExam(exam.id);
-          if (assignedUsers.some((u) => u.id === user.id)) {
+          if (assignedUsers.some((u: AssignedUser) => u.id === user.id)) {
             assignedIds.add(exam.id);
           }
         } catch { /* 무시 */ }
@@ -119,7 +203,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  // 시험 할당 토글
   const handleToggleExam = async (examId: string) => {
     if (!assignTarget) return;
     try {
@@ -148,17 +231,124 @@ export default function AdminUsersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">사용자 관리</h1>
-        <Button onClick={() => setShowCreateForm((v) => !v)}>
-          {showCreateForm ? '취소' : '+ 계정 생성'}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => createMode === 'excel' ? resetCreateMode() : (resetCreateMode(), setCreateMode('excel'))}
+          >
+            {createMode === 'excel' ? '취소' : '📥 엑셀 일괄 생성'}
+          </Button>
+          <Button
+            onClick={() => createMode === 'single' ? resetCreateMode() : (resetCreateMode(), setCreateMode('single'))}
+          >
+            {createMode === 'single' ? '취소' : '+ 계정 생성'}
+          </Button>
+        </div>
       </div>
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* 계정 생성 폼 */}
-      {showCreateForm && (
+      {/* ── 엑셀 일괄 생성 섹션 ── */}
+      {createMode === 'excel' && (
+        <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-5">
+          <h2 className="mb-1 font-semibold text-purple-800">엑셀 일괄 계정 생성</h2>
+          <p className="mb-3 text-sm text-purple-700">
+            샘플 파일 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 계정이 자동으로 생성됩니다.
+          </p>
+
+          {/* 컬럼 형식 안내 */}
+          <div className="mb-4 rounded-lg border border-purple-200 bg-white px-4 py-3 text-sm">
+            <p className="font-medium text-gray-700 mb-1">엑셀 컬럼 형식</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-gray-600">
+                <thead>
+                  <tr className="bg-gray-100">
+                    {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)'].map((h) => (
+                      <th key={h} className="border border-gray-200 px-2 py-1 text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border border-gray-200 px-2 py-1">홍길동</td>
+                    <td className="border border-gray-200 px-2 py-1">hong@example.com</td>
+                    <td className="border border-gray-200 px-2 py-1">password123</td>
+                    <td className="border border-gray-200 px-2 py-1 font-medium">USER</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mb-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-purple-600 file:px-3 file:py-2 file:text-white file:text-sm file:cursor-pointer hover:file:bg-purple-700"
+            />
+          </div>
+
+          {excelError && (
+            <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{excelError}</div>
+          )}
+
+          {/* 업로드 결과 */}
+          {uploadResult && (
+            <div className="mb-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm">
+              <p className="font-medium text-green-800">✅ {uploadResult.success}명 생성 완료</p>
+              {uploadResult.failed.length > 0 && (
+                <div className="mt-2">
+                  <p className="font-medium text-red-700">❌ {uploadResult.failed.length}명 실패:</p>
+                  {uploadResult.failed.map((f, i) => (
+                    <p key={i} className="text-red-600 ml-2">• {f.email}: {f.reason}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 미리보기 */}
+          {excelPreview.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-2 text-sm font-medium text-gray-700">
+                미리보기 ({excelPreview.length}명)
+              </p>
+              <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                {excelPreview.map((row, idx) => {
+                  const role = row['권한(USER/ADMIN)']?.toString().toUpperCase();
+                  return (
+                    <div key={idx} className="flex items-center justify-between border-b border-gray-100 px-4 py-2 text-sm last:border-0">
+                      <div>
+                        <span className="font-medium text-gray-800">{row['이름']}</span>
+                        <span className="ml-2 text-gray-500">{row['이메일']}</span>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {role === 'ADMIN' ? '관리자' : '일반'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <Button
+                className="mt-3"
+                isLoading={isUploading}
+                onClick={handleExcelUpload}
+              >
+                {excelPreview.length}명 계정 생성
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 개별 계정 생성 폼 ── */}
+      {createMode === 'single' && (
         <form
           onSubmit={handleCreate}
           className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5"
@@ -206,7 +396,7 @@ export default function AdminUsersPage() {
         </form>
       )}
 
-      {/* 사용자 목록 */}
+      {/* ── 사용자 목록 ── */}
       <div className="flex flex-col gap-3">
         {users.map((user) => (
           <div
@@ -234,28 +424,13 @@ export default function AdminUsersPage() {
               </div>
 
               <div className="flex gap-2">
-                {/* 시험 할당 */}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => openAssignModal(user)}
-                >
+                <Button variant="secondary" size="sm" onClick={() => openAssignModal(user)}>
                   시험 할당
                 </Button>
-                {/* role 변경 */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRoleChange(user.id, user.role)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => handleRoleChange(user.id, user.role)}>
                   {user.role === 'USER' ? '관리자로' : '일반으로'}
                 </Button>
-                {/* 삭제 */}
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setDeleteTargetId(user.id)}
-                >
+                <Button variant="danger" size="sm" onClick={() => setDeleteTargetId(user.id)}>
                   삭제
                 </Button>
               </div>
@@ -312,18 +487,14 @@ export default function AdminUsersPage() {
                         <p className="text-xs text-gray-500">
                           {exam._count?.questions ?? 0}문제 ·{' '}
                           {Math.floor(exam.duration / 60)}분 ·{' '}
-                          <span
-                            className={exam.isPublished ? 'text-green-600' : 'text-yellow-600'}
-                          >
+                          <span className={exam.isPublished ? 'text-green-600' : 'text-yellow-600'}>
                             {exam.isPublished ? '공개' : '비공개'}
                           </span>
                         </p>
                       </div>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          isAssigned
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-500'
+                          isAssigned ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         {isAssigned ? '할당됨' : '미할당'}

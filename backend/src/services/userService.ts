@@ -61,6 +61,29 @@ export const updateUserRole = async (userId: string, role: Role) => {
   });
 };
 
+// 사용자 일괄 생성 (엑셀 업로드용)
+// 실패한 항목은 건너뛰고 성공/실패 결과를 반환
+export const bulkCreateUsers = async (
+  users: CreateUserInput[],
+): Promise<{ success: number; failed: { email: string; reason: string }[] }> => {
+  const failed: { email: string; reason: string }[] = [];
+  let success = 0;
+
+  for (const input of users) {
+    try {
+      await createUser(input);
+      success++;
+    } catch (err) {
+      failed.push({
+        email: input.email,
+        reason: err instanceof AppError ? err.message : '생성 실패',
+      });
+    }
+  }
+
+  return { success, failed };
+};
+
 // 사용자 삭제
 export const deleteUser = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });

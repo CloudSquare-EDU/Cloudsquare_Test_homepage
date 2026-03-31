@@ -91,6 +91,37 @@ export const updateQuestion = async (id: string, input: UpdateQuestionInput) => 
   });
 };
 
+// 문제 일괄 생성 (트랜잭션으로 한 번에 처리)
+export const bulkCreateQuestions = async (
+  examId: string,
+  questions: Omit<CreateQuestionInput, 'examId'>[],
+) => {
+  const exam = await prisma.exam.findUnique({ where: { id: examId } });
+  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
+
+  // 기존 문제 수 조회 (order 이어서 설정)
+  const existingCount = await prisma.question.count({ where: { examId } });
+
+  return prisma.$transaction(
+    questions.map((q, idx) =>
+      prisma.question.create({
+        data: {
+          examId,
+          content: q.content,
+          order: existingCount + idx + 1,
+          choices: {
+            create: q.choices.map((c) => ({
+              content: c.content,
+              isCorrect: c.isCorrect,
+              order: c.order,
+            })),
+          },
+        },
+      }),
+    ),
+  );
+};
+
 // 문제 삭제 (Cascade로 Choice, Answer도 자동 삭제)
 export const deleteQuestion = async (id: string) => {
   const question = await prisma.question.findUnique({ where: { id } });

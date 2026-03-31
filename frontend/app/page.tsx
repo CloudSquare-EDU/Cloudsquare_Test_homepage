@@ -26,13 +26,14 @@ export default function HomePage() {
   }, [user, isInitialized, router]);
 
   useEffect(() => {
-    if (!user || user.role === 'ADMIN') return;
+    if (!isInitialized) return;
+    if (!user || user.role === 'ADMIN') { setIsLoading(false); return; }
     examsApi
       .getAll()
       .then(setExams)
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
-  }, [user]);
+  }, [user, isInitialized]);
 
   if (isLoading) {
     return (

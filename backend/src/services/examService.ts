@@ -31,16 +31,15 @@ export const getAssignedExamsForUser = async (userId: string) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  return mappings
-    .filter((m) => m.exam.isPublished)
-    .map((m) => ({
-      id: m.exam.id,
-      title: m.exam.title,
-      description: m.exam.description,
-      duration: m.exam.duration,
-      questionCount: m.exam._count.questions,
-      createdAt: m.exam.createdAt,
-    }));
+  // 관리자가 명시적으로 할당한 시험은 isPublished 여부와 무관하게 표시
+  return mappings.map((m) => ({
+    id: m.exam.id,
+    title: m.exam.title,
+    description: m.exam.description,
+    duration: m.exam.duration,
+    questionCount: m.exam._count.questions,
+    createdAt: m.exam.createdAt,
+  }));
 };
 
 // 전체 시험 목록 (ADMIN용)
