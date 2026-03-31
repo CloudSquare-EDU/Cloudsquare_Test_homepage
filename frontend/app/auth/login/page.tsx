@@ -71,11 +71,8 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
-          계정이 없으신가요?{' '}
-          <Link href="/auth/register" className="text-blue-600 hover:underline">
-            회원가입
-          </Link>
+        <p className="mt-4 text-center text-sm text-gray-400">
+          계정이 없으신 경우 관리자에게 문의해주세요.
         </p>
       </div>
     </div>

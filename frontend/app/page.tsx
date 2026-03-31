@@ -5,22 +5,34 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { examsApi } from '@/lib/api/exams';
 import { ExamSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { useAuthStore } from '@/lib/store/authStore';
 
 export default function HomePage() {
+  const { user, isInitialized } = useAuthStore();
+  const router = useRouter();
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ADMIN은 관리자 대시보드로 자동 이동
   useEffect(() => {
+    if (!isInitialized) return;
+    if (!user) { router.push('/auth/login'); return; }
+    if (user.role === 'ADMIN') { router.push('/admin'); return; }
+  }, [user, isInitialized, router]);
+
+  useEffect(() => {
+    if (!user || user.role === 'ADMIN') return;
     examsApi
       .getAll()
       .then(setExams)
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [user]);
 
   if (isLoading) {
     return (
