@@ -128,7 +128,7 @@ export default function AdminUsersPage() {
         setAssignedExamIds((prev) => { const s = new Set(prev); s.delete(examId); return s; });
       } else {
         await usersApi.assignToExam(examId, assignTarget.id);
-        setAssignedExamIds((prev) => new Set([...prev, examId]));
+        setAssignedExamIds((prev) => new Set(Array.from(prev).concat(examId)));
       }
       loadUsers();
     } catch (err) {
