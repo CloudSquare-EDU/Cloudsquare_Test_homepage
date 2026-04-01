@@ -1,5 +1,9 @@
 // app/submissions/[id]/page.tsx
 // 역할: 응시 결과 상세 페이지 — 점수, 정오표 표시
+// 수정 이력:
+//   - 복수 정답(선다형) 지원: Answer 레코드가 선택지 수만큼 존재하므로
+//     questionId 기준으로 그룹핑 후 문제당 1개 카드로 표시
+//   - 정답 수 계산도 개별 레코드가 아닌 문제 단위로 집계
 
 'use client';
 
@@ -9,6 +13,14 @@ import Link from 'next/link';
 import { submissionsApi } from '@/lib/api/submissions';
 import { SubmissionDetail } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+
+// 문제별로 Answer 레코드를 묶은 그룹 타입
+interface AnswerGroup {
+  questionId: string;
+  isCorrect: boolean;
+  question: SubmissionDetail['answers'][number]['question'];
+  selectedChoiceIds: Set<string>; // 사용자가 선택한 선택지 ID 집합
+}
 
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,8 +52,31 @@ export default function SubmissionDetailPage() {
     );
   }
 
-  const correctCount = submission.answers.filter((a) => a.isCorrect).length;
-  const percentage = submission.score ?? Math.round((correctCount / submission.totalQuestions) * 100);
+  // ── questionId 기준으로 Answer 레코드 그룹핑 ──────────────────
+  // 복수 정답 문제는 선택지마다 Answer 레코드가 1개씩 있으므로 묶어야 함
+  const groupMap = new Map<string, AnswerGroup>();
+  for (const answer of submission.answers) {
+    const existing = groupMap.get(answer.questionId);
+    if (existing) {
+      existing.selectedChoiceIds.add(answer.choice.id);
+    } else {
+      groupMap.set(answer.questionId, {
+        questionId: answer.questionId,
+        isCorrect: answer.isCorrect,
+        question: answer.question,
+        selectedChoiceIds: new Set([answer.choice.id]),
+      });
+    }
+  }
+  // question.order 순서로 정렬
+  const answerGroups = Array.from(groupMap.values()).sort(
+    (a, b) => (a.question as { order?: number }).order ?? 0 - ((b.question as { order?: number }).order ?? 0),
+  );
+
+  // 정답 수: 문제 단위로 집계 (레코드 수가 아님)
+  const correctCount = answerGroups.filter((g) => g.isCorrect).length;
+  const percentage =
+    submission.score ?? Math.round((correctCount / submission.totalQuestions) * 100);
 
   return (
     <div>
@@ -63,52 +98,71 @@ export default function SubmissionDetailPage() {
       {/* 정오표 */}
       <h2 className="mb-4 text-lg font-bold">문제별 결과</h2>
       <div className="flex flex-col gap-4">
-        {submission.answers.map((answer, idx) => (
-          <div
-            key={answer.questionId}
-            className={`rounded-xl border p-5 ${
-              answer.isCorrect
-                ? 'border-green-200 bg-green-50'
-                : 'border-red-200 bg-red-50'
-            }`}
-          >
-            <div className="mb-3 flex items-start gap-2">
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                  answer.isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                }`}
-              >
-                {answer.isCorrect ? '정답' : '오답'}
-              </span>
-              <p className="font-medium text-gray-900">
-                Q{idx + 1}. {answer.question.content}
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5 pl-4">
-              {answer.question.choices.map((choice) => {
-                const isMyAnswer = choice.id === answer.choice.id;
-                const isCorrectAnswer = choice.isCorrect;
+        {answerGroups.map((group, idx) => {
+          const isMulti = group.question.choices.filter((c) => c.isCorrect).length > 1;
 
-                return (
-                  <p
-                    key={choice.id}
-                    className={`text-sm ${
-                      isCorrectAnswer
-                        ? 'font-semibold text-green-700'
-                        : isMyAnswer && !isCorrectAnswer
-                        ? 'text-red-600 line-through'
-                        : 'text-gray-600'
-                    }`}
-                  >
-                    {choice.order}. {choice.content}
-                    {isCorrectAnswer && ' ✓'}
-                    {isMyAnswer && !isCorrectAnswer && ' (내 답)'}
-                  </p>
-                );
-              })}
+          return (
+            <div
+              key={group.questionId}
+              className={`rounded-xl border p-5 ${
+                group.isCorrect
+                  ? 'border-green-200 bg-green-50'
+                  : 'border-red-200 bg-red-50'
+              }`}
+            >
+              {/* 문제 헤더 */}
+              <div className="mb-3 flex items-start gap-2">
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
+                    group.isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                  }`}
+                >
+                  {group.isCorrect ? '정답' : '오답'}
+                </span>
+                {isMulti && (
+                  <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                    복수 정답
+                  </span>
+                )}
+                <p className="font-medium text-gray-900">
+                  Q{idx + 1}. {group.question.content}
+                </p>
+              </div>
+
+              {/* 선택지 목록 */}
+              <div className="flex flex-col gap-1.5 pl-4">
+                {group.question.choices.map((choice) => {
+                  const isMyAnswer = group.selectedChoiceIds.has(choice.id);
+                  const isCorrectAnswer = choice.isCorrect;
+
+                  let className = 'text-sm text-gray-600';
+                  let suffix = '';
+
+                  if (isCorrectAnswer && isMyAnswer) {
+                    // 정답이고 내가 선택한 것
+                    className = 'text-sm font-semibold text-green-700';
+                    suffix = ' ✓';
+                  } else if (isCorrectAnswer && !isMyAnswer) {
+                    // 정답인데 내가 선택 안 한 것 (오답 처리된 경우에만 표시)
+                    className = 'text-sm font-semibold text-green-700';
+                    suffix = ' ✓ (정답)';
+                  } else if (!isCorrectAnswer && isMyAnswer) {
+                    // 오답인데 내가 선택한 것
+                    className = 'text-sm text-red-600 line-through';
+                    suffix = ' (내 답)';
+                  }
+
+                  return (
+                    <p key={choice.id} className={className}>
+                      {choice.order}. {choice.content}
+                      {suffix}
+                    </p>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-8 flex justify-center gap-4">
