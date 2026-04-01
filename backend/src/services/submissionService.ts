@@ -4,6 +4,7 @@
 //   - 제출 시 DB에서 정답을 조회하고 채점한 뒤 결과를 단일 트랜잭션으로 저장
 //   - isPublished 여부와 무관하게 UserExam 할당 여부만으로 응시 권한 결정
 //   - 동일 시험 중복 응시 차단 (관리자가 reset하기 전까지 재응시 불가)
+//   - 선다형 지원: choiceIds 배열로 복수 선택, 정답 집합과 정확히 일치해야 정답 처리 (all-or-nothing)
 
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
@@ -11,7 +12,7 @@ import { ErrorCode } from '../types';
 
 interface AnswerInput {
   questionId: string;
-  choiceId: string;
+  choiceIds: string[]; // 복수 정답 지원 — 단답형이면 길이 1
 }
 
 interface SubmitInput {
@@ -66,25 +67,49 @@ export const submitExam = async (input: SubmitInput) => {
     );
   }
 
-  // 5. 채점: 각 답안의 정답 여부 계산
-  const gradedAnswers = answers.map((answer) => {
+  // 5. 채점: 선다형 — 선택한 집합이 정답 집합과 정확히 일치해야 정답 (all-or-nothing)
+  const gradedAnswerRecords: Array<{ questionId: string; choiceId: string; isCorrect: boolean }> = [];
+  let correctCount = 0;
+  const questionResultMap: Record<string, { isCorrect: boolean; correctChoiceIds: string[] }> = {};
+
+  for (const answer of answers) {
     const question = exam.questions.find((q) => q.id === answer.questionId);
     if (!question) {
       throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 questionId: ${answer.questionId}`);
     }
-    const choice = question.choices.find((c) => c.id === answer.choiceId);
-    if (!choice) {
-      throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 choiceId: ${answer.choiceId}`);
-    }
-    return {
-      questionId: answer.questionId,
-      choiceId: answer.choiceId,
-      isCorrect: choice.isCorrect,
-      correctChoiceId: question.choices.find((c) => c.isCorrect)?.id ?? '',
-    };
-  });
 
-  const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
+    // 선택한 모든 choiceId가 이 문제의 선택지인지 확인
+    for (const choiceId of answer.choiceIds) {
+      const choiceExists = question.choices.some((c) => c.id === choiceId);
+      if (!choiceExists) {
+        throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 choiceId: ${choiceId}`);
+      }
+    }
+
+    // 이 문제의 정답 집합
+    const correctChoiceIds = question.choices.filter((c) => c.isCorrect).map((c) => c.id);
+    const selectedSet = new Set(answer.choiceIds);
+    const correctSet = new Set(correctChoiceIds);
+
+    // 선택 집합 == 정답 집합이어야 정답
+    const isQuestionCorrect =
+      selectedSet.size === correctSet.size &&
+      [...correctSet].every((id) => selectedSet.has(id));
+
+    if (isQuestionCorrect) correctCount++;
+
+    questionResultMap[answer.questionId] = { isCorrect: isQuestionCorrect, correctChoiceIds };
+
+    // 선택한 각 choiceId마다 Answer 레코드 1개씩 생성 (복수 선택 지원)
+    for (const choiceId of answer.choiceIds) {
+      gradedAnswerRecords.push({
+        questionId: answer.questionId,
+        choiceId,
+        isCorrect: isQuestionCorrect,
+      });
+    }
+  }
+
   const score = Math.round((correctCount / totalQuestions) * 100);
 
   // 6. 트랜잭션으로 Submission + Answer 동시 저장
@@ -96,7 +121,7 @@ export const submitExam = async (input: SubmitInput) => {
         score,
         totalQuestions,
         answers: {
-          create: gradedAnswers.map((a) => ({
+          create: gradedAnswerRecords.map((a) => ({
             questionId: a.questionId,
             choiceId: a.choiceId,
             isCorrect: a.isCorrect,
@@ -115,16 +140,24 @@ export const submitExam = async (input: SubmitInput) => {
     return created;
   });
 
+  // 응답: questionId 기준으로 그룹핑하여 선택한 choiceIds 목록 반환
+  const answersByQuestion = new Map<string, string[]>();
+  for (const a of submission.answers) {
+    const ids = answersByQuestion.get(a.questionId) ?? [];
+    ids.push(a.choiceId);
+    answersByQuestion.set(a.questionId, ids);
+  }
+
   return {
     submissionId: submission.id,
     score,
     totalQuestions,
     correctCount,
-    answers: submission.answers.map((a) => ({
-      questionId: a.questionId,
-      choiceId: a.choiceId,
-      isCorrect: a.isCorrect,
-      correctChoiceId: gradedAnswers.find((g) => g.questionId === a.questionId)?.correctChoiceId,
+    answers: Array.from(answersByQuestion.entries()).map(([questionId, choiceIds]) => ({
+      questionId,
+      choiceIds,
+      isCorrect: questionResultMap[questionId]?.isCorrect ?? false,
+      correctChoiceIds: questionResultMap[questionId]?.correctChoiceIds ?? [],
     })),
   };
 };

@@ -1,7 +1,10 @@
 // app/exams/[id]/page.tsx
 // 역할: 시험 응시 페이지
 // UX 요구사항: 타이머 고정 표시, beforeunload 이탈 방지, 제출 전 확인 모달
-// 변경 이력: isPublished 조건 제거, 중복 응시 차단 UI 추가 (이미 응시한 경우 재응시 불가 안내)
+// 변경 이력:
+//   - isPublished 조건 제거, 중복 응시 차단 UI 추가
+//   - 선다형 지원: answerCount > 1이면 체크박스, 1이면 라디오 방식 표시
+//   - answers 상태: Record<string, string[]> (선택지 ID 배열)
 
 'use client';
 
@@ -10,7 +13,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
-import { ExamDetail, AnswerInput, SubmissionSummary } from '@/lib/types';
+import { ExamDetail, SubmissionSummary } from '@/lib/types';
 import { useTimer } from '@/lib/hooks/useTimer';
 import { Timer } from '@/components/ui/Timer';
 import { Button } from '@/components/ui/Button';
@@ -22,12 +25,12 @@ export default function ExamPage() {
   const router = useRouter();
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // answers: questionId → 선택된 choiceId 배열 (단답형도 배열로 통일)
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 이미 응시한 경우 해당 submission 정보 저장
   const [existingSubmission, setExistingSubmission] = useState<SubmissionSummary | null>(null);
 
   // 타이머 만료 시 자동 제출
@@ -70,8 +73,21 @@ export default function ExamPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  const handleAnswerSelect = (questionId: string, choiceId: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: choiceId }));
+  // 단답형 선택 (radio 방식 — 하나만 선택)
+  const handleSingleSelect = (questionId: string, choiceId: string) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: [choiceId] }));
+  };
+
+  // 선다형 토글 (checkbox 방식 — 복수 선택)
+  const handleMultiToggle = (questionId: string, choiceId: string) => {
+    setAnswers((prev) => {
+      const current = prev[questionId] ?? [];
+      const exists = current.includes(choiceId);
+      const updated = exists
+        ? current.filter((id) => id !== choiceId)
+        : [...current, choiceId];
+      return { ...prev, [questionId]: updated };
+    });
   };
 
   const handleSubmit = async () => {
@@ -79,9 +95,9 @@ export default function ExamPage() {
     setIsSubmitting(true);
     setShowConfirmModal(false);
 
-    const answerList: AnswerInput[] = exam.questions.map((q) => ({
+    const answerList = exam.questions.map((q) => ({
       questionId: q.id,
-      choiceId: answers[q.id] ?? '',
+      choiceIds: answers[q.id] ?? [],
     }));
 
     try {
@@ -100,7 +116,10 @@ export default function ExamPage() {
     }
   };
 
-  const answeredCount = Object.keys(answers).length;
+  // 답한 문제 수: choiceIds 배열이 비어있지 않은 문제만 카운트
+  const answeredCount = exam
+    ? exam.questions.filter((q) => (answers[q.id]?.length ?? 0) > 0).length
+    : 0;
   const totalCount = exam?.questions.length ?? 0;
 
   if (isLoading) {
@@ -168,45 +187,98 @@ export default function ExamPage() {
 
       {/* 문제 목록 */}
       <div className="mt-6 flex flex-col gap-6">
-        {exam.questions.map((question, idx) => (
-          <div
-            key={question.id}
-            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-          >
-            <p className="mb-4 font-medium text-gray-900">
-              <span className="mr-2 text-blue-600">Q{idx + 1}.</span>
-              {question.content}
-            </p>
-            <div className="flex flex-col gap-2">
-              {question.choices.map((choice) => {
-                const isSelected = answers[question.id] === choice.id;
-                return (
-                  <button
-                    key={choice.id}
-                    onClick={() => handleAnswerSelect(question.id, choice.id)}
-                    className={`
-                      flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition
-                      ${isSelected
-                        ? 'border-blue-500 bg-blue-50 text-blue-800'
-                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                      }
-                    `}
-                  >
-                    <span
+        {exam.questions.map((question, idx) => {
+          const isMulti = question.answerCount > 1;
+          const selectedIds = answers[question.id] ?? [];
+
+          return (
+            <div
+              key={question.id}
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+            >
+              {/* 문제 텍스트 + 선다형 배지 */}
+              <div className="mb-1 flex items-start gap-2">
+                <p className="flex-1 font-medium text-gray-900">
+                  <span className="mr-2 text-blue-600">Q{idx + 1}.</span>
+                  {question.content}
+                </p>
+                {isMulti && (
+                  <span className="mt-0.5 shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                    복수 정답 ({question.answerCount}개)
+                  </span>
+                )}
+              </div>
+              {isMulti && (
+                <p className="mb-3 text-xs text-gray-400 pl-6">
+                  정답을 모두 선택하세요. (총 {question.answerCount}개)
+                </p>
+              )}
+
+              <div className="flex flex-col gap-2 mt-3">
+                {question.choices.map((choice) => {
+                  const isSelected = selectedIds.includes(choice.id);
+
+                  if (isMulti) {
+                    // ── 선다형: 체크박스 ──
+                    return (
+                      <label
+                        key={choice.id}
+                        className={`
+                          flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition
+                          ${isSelected
+                            ? 'border-purple-500 bg-purple-50 text-purple-800'
+                            : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                          }
+                        `}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleMultiToggle(question.id, choice.id)}
+                          className="h-4 w-4 rounded text-purple-600"
+                        />
+                        <span
+                          className={`
+                            flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold
+                            ${isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-gray-400'}
+                          `}
+                        >
+                          {choice.order}
+                        </span>
+                        {choice.content}
+                      </label>
+                    );
+                  }
+
+                  // ── 단답형: 라디오 방식 버튼 ──
+                  return (
+                    <button
+                      key={choice.id}
+                      onClick={() => handleSingleSelect(question.id, choice.id)}
                       className={`
-                        flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-xs font-bold
-                        ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400'}
+                        flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition
+                        ${isSelected
+                          ? 'border-blue-500 bg-blue-50 text-blue-800'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                        }
                       `}
                     >
-                      {choice.order}
-                    </span>
-                    {choice.content}
-                  </button>
-                );
-              })}
+                      <span
+                        className={`
+                          flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold
+                          ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400'}
+                        `}
+                      >
+                        {choice.order}
+                      </span>
+                      {choice.content}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* 하단 고정 제출 버튼 */}

@@ -13,7 +13,9 @@ const submitSchema = z.object({
     .array(
       z.object({
         questionId: z.string().min(1),
-        choiceId: z.string().min(1),
+        choiceIds: z
+          .array(z.string().min(1))
+          .min(1, '각 문제에 최소 하나 이상의 선택지를 선택해야 합니다.'),
       }),
     )
     .min(1, '최소 하나 이상의 답안이 필요합니다.'),

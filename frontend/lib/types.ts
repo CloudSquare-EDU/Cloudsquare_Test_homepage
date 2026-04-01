@@ -38,6 +38,7 @@ export interface Question {
   id: string;
   content: string;
   order: number;
+  answerCount: number; // 정답 선택지 수: 1이면 단답형(radio), 2+이면 선다형(checkbox)
   choices: Choice[];
 }
 
@@ -53,14 +54,14 @@ export interface ExamDetail {
 // ─── Submission ──────────────────────────────────────────────
 export interface AnswerInput {
   questionId: string;
-  choiceId: string;
+  choiceIds: string[]; // 복수 정답 지원 — 단답형이면 길이 1
 }
 
 export interface GradedAnswer {
   questionId: string;
-  choiceId: string;
+  choiceIds: string[];        // 사용자가 선택한 선택지 ID 목록
   isCorrect: boolean;
-  correctChoiceId: string | undefined;
+  correctChoiceIds: string[]; // 실제 정답 선택지 ID 목록
 }
 
 export interface SubmissionResult {
@@ -83,6 +84,7 @@ export interface SubmissionSummary {
 }
 
 export interface SubmissionDetail extends SubmissionSummary {
+  // answers: DB에서 선택지 하나당 레코드 1개 저장 → 복수 정답 문제는 여러 레코드
   answers: Array<{
     questionId: string;
     isCorrect: boolean;
@@ -91,7 +93,7 @@ export interface SubmissionDetail extends SubmissionSummary {
       content: string;
       choices: Array<Choice & { isCorrect: boolean }>;
     };
-    choice: Choice;
+    choice: Choice; // 이 레코드에서 선택한 단일 선택지
   }>;
 }
 

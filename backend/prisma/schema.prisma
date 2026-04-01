@@ -151,7 +151,7 @@ model Answer {
   question   Question   @relation(fields: [questionId], references: [id])
   choice     Choice     @relation(fields: [choiceId], references: [id])
 
-  @@unique([submissionId, questionId]) // 한 응시에서 같은 문제에 중복 답안 방지
+  // @@unique 제거: 복수 정답 문제에서 한 문제에 여러 선택지 저장 허용
   @@index([submissionId])
   @@map("answers")
 }

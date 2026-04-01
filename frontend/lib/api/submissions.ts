@@ -12,8 +12,8 @@ import {
 } from '../types';
 
 export const submissionsApi = {
-  // 시험 제출
-  submit: (data: { examId: string; answers: Array<{ questionId: string; choiceId: string }> }) =>
+  // 시험 제출 — choiceIds 배열로 복수 정답 지원
+  submit: (data: { examId: string; answers: Array<{ questionId: string; choiceIds: string[] }> }) =>
     apiClient.post<SubmissionResult>('/submissions', data),
 
   // 내 응시 목록

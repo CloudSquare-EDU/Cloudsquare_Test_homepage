@@ -50,7 +50,10 @@ export const getAllExams = async () => {
   });
 };
 
-// 시험 상세 + 문제 조회 (정답 isCorrect 제외)
+// 시험 상세 + 문제 조회
+// 설계 포인트:
+//   - isCorrect는 DB에서 조회하되 클라이언트에는 노출하지 않음 (정답 노출 방지)
+//   - 대신 answerCount(정답 선택지 수)를 반환 → 프론트에서 radio(1개) / checkbox(2개+) 전환에 활용
 export const getExamById = async (id: string) => {
   const exam = await prisma.exam.findUnique({
     where: { id },
@@ -60,12 +63,7 @@ export const getExamById = async (id: string) => {
         include: {
           choices: {
             orderBy: { order: 'asc' },
-            select: {
-              id: true,
-              content: true,
-              order: true,
-              // isCorrect 제외: 클라이언트에서 정답 확인 불가
-            },
+            // isCorrect 포함해서 가져온 뒤 아래에서 제거
           },
         },
       },
@@ -76,7 +74,15 @@ export const getExamById = async (id: string) => {
     throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
   }
 
-  return exam;
+  // isCorrect를 사용해 answerCount를 계산한 뒤 클라이언트 응답에서 제거
+  return {
+    ...exam,
+    questions: exam.questions.map((q) => ({
+      ...q,
+      answerCount: q.choices.filter((c) => c.isCorrect).length,
+      choices: q.choices.map(({ isCorrect: _removed, ...rest }) => rest),
+    })),
+  };
 };
 
 // 시험 생성 (ADMIN)

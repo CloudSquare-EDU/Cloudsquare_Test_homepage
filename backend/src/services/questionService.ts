@@ -33,10 +33,10 @@ export const createQuestion = async (input: CreateQuestionInput) => {
   const exam = await prisma.exam.findUnique({ where: { id: examId } });
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
 
-  // 정답이 하나 이상 있는지 확인
+  // 정답이 하나 이상 있는지 확인 (복수 정답 허용)
   const correctCount = choices.filter((c) => c.isCorrect).length;
-  if (correctCount !== 1) {
-    throw new AppError(400, ErrorCode.BAD_REQUEST, '선택지에 정답이 정확히 하나 있어야 합니다.');
+  if (correctCount < 1) {
+    throw new AppError(400, ErrorCode.BAD_REQUEST, '정답을 최소 1개 이상 선택해야 합니다.');
   }
 
   // 트랜잭션으로 문제 + 선택지 동시 생성
