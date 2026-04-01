@@ -69,7 +69,6 @@ export const getExamsByUser = async (userId: string) => {
   });
 
   return mappings
-    .filter((m) => m.exam.isPublished)
     .map((m) => ({
       id: m.exam.id,
       title: m.exam.title,
