@@ -113,3 +113,32 @@ export interface AdminExam extends ExamSummary {
     submissions: number;
   };
 }
+
+// ─── 관리자 응시 결과 ─────────────────────────────────────────
+export interface AdminSubmissionSummary {
+  id: string;
+  score: number | null;
+  totalQuestions: number;
+  submittedAt: string;
+  user: { id: string; name: string; email: string };
+  exam: { id: string; title: string };
+}
+
+// 특정 사용자의 시험별 응시 현황
+export interface UserExamStatus {
+  examId: string;
+  examTitle: string;
+  duration: number;
+  submitted: boolean;
+  submission: {
+    id: string;
+    score: number | null;
+    totalQuestions: number;
+    submittedAt: string;
+  } | null;
+}
+
+export interface UserSubmissionStatus {
+  user: { id: string; name: string; email: string };
+  exams: UserExamStatus[];
+}

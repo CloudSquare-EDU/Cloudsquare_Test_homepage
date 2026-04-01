@@ -1,14 +1,16 @@
 // app/exams/[id]/page.tsx
 // 역할: 시험 응시 페이지
 // UX 요구사항: 타이머 고정 표시, beforeunload 이탈 방지, 제출 전 확인 모달
+// 변경 이력: isPublished 조건 제거, 중복 응시 차단 UI 추가 (이미 응시한 경우 재응시 불가 안내)
 
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
-import { ExamDetail, AnswerInput } from '@/lib/types';
+import { ExamDetail, AnswerInput, SubmissionSummary } from '@/lib/types';
 import { useTimer } from '@/lib/hooks/useTimer';
 import { Timer } from '@/components/ui/Timer';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +27,8 @@ export default function ExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 이미 응시한 경우 해당 submission 정보 저장
+  const [existingSubmission, setExistingSubmission] = useState<SubmissionSummary | null>(null);
 
   // 타이머 만료 시 자동 제출
   const handleTimerExpire = useCallback(() => {
@@ -37,13 +41,23 @@ export default function ExamPage() {
     onExpire: handleTimerExpire,
   });
 
-  // 시험 데이터 로드
+  // 시험 데이터 로드 + 중복 응시 여부 확인
   useEffect(() => {
-    examsApi
-      .getById(id)
-      .then(setExam)
-      .catch(() => setError('시험을 불러오는 데 실패했습니다. 로그인 후 다시 시도해주세요.'))
-      .finally(() => setIsLoading(false));
+    const load = async () => {
+      try {
+        const [examData, prevSub] = await Promise.all([
+          examsApi.getById(id),
+          submissionsApi.checkExamSubmission(id),
+        ]);
+        setExam(examData);
+        if (prevSub) setExistingSubmission(prevSub);
+      } catch {
+        setError('시험을 불러오는 데 실패했습니다. 로그인 후 다시 시도해주세요.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
   }, [id]);
 
   // 페이지 이탈 방지 (beforeunload)
@@ -101,6 +115,38 @@ export default function ExamPage() {
     return (
       <div className="rounded-lg bg-red-50 p-4 text-red-700">
         {error ?? '시험을 찾을 수 없습니다.'}
+      </div>
+    );
+  }
+
+  // 이미 응시한 경우 — 재응시 불가 안내 화면
+  if (existingSubmission) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
+        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-8 max-w-md w-full">
+          <p className="text-4xl mb-4">📋</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">이미 응시한 시험입니다</h2>
+          <p className="text-gray-600 mb-1">
+            <strong>{exam.title}</strong>
+          </p>
+          <p className="text-gray-500 text-sm mb-2">
+            응시일: {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')}
+          </p>
+          <p className="text-2xl font-bold text-blue-600 mb-6">
+            점수: {existingSubmission.score}점
+          </p>
+          <div className="flex flex-col gap-2">
+            <Link href={`/submissions/${existingSubmission.id}`}>
+              <Button className="w-full">결과 상세 보기</Button>
+            </Link>
+            <Link href="/">
+              <Button variant="secondary" className="w-full">시험 목록으로</Button>
+            </Link>
+          </div>
+          <p className="mt-4 text-xs text-gray-400">
+            재응시가 필요하면 관리자에게 문의하세요.
+          </p>
+        </div>
       </div>
     );
   }

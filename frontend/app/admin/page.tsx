@@ -18,7 +18,7 @@ interface AdminMenuCard {
 const MENU_CARDS: AdminMenuCard[] = [
   {
     title: '시험 관리',
-    description: '모의시험을 생성하고 문제를 등록합니다. 시험을 공개하거나 비공개로 설정할 수 있습니다.',
+    description: '모의시험을 생성하고 문제를 등록합니다. 사용자에게 시험을 개별 할당하여 접근을 제어합니다.',
     href: '/admin/exams',
     icon: '📝',
   },
@@ -27,6 +27,12 @@ const MENU_CARDS: AdminMenuCard[] = [
     description: '사용자 계정을 생성하고 권한을 관리합니다. 각 사용자에게 시험을 배정할 수 있습니다.',
     href: '/admin/users',
     icon: '👥',
+  },
+  {
+    title: '응시 결과 관리',
+    description: '사용자별 시험 응시 현황과 점수를 확인합니다. 필요 시 재응시를 허용할 수 있습니다.',
+    href: '/admin/results',
+    icon: '📊',
   },
 ];
 

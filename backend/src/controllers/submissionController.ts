@@ -82,3 +82,31 @@ export const getAllSubmissions = async (
     next(err);
   }
 };
+
+// GET /submissions/admin/users/:userId — 특정 사용자 응시 현황 (ADMIN)
+export const getSubmissionsByUser = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = await submissionService.getSubmissionsByUser(req.params.userId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /submissions/:id/reset — 재응시 허용 (ADMIN)
+export const resetSubmission = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    await submissionService.resetSubmission(req.params.id);
+    res.json({ success: true, data: { message: '재응시가 허용되었습니다.' } });
+  } catch (err) {
+    next(err);
+  }
+};
