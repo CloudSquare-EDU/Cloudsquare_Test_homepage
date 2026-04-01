@@ -8,6 +8,7 @@ import {
   SubmissionDetail,
   AdminSubmissionSummary,
   UserSubmissionStatus,
+  ExamSubmissionStatus,
 } from '../types';
 
 export const submissionsApi = {
@@ -27,6 +28,10 @@ export const submissionsApi = {
   // 특정 사용자 응시 현황 (ADMIN)
   getByUser: (userId: string) =>
     apiClient.get<UserSubmissionStatus>(`/submissions/admin/users/${userId}`),
+
+  // 특정 시험 응시 현황 (ADMIN)
+  getByExam: (examId: string) =>
+    apiClient.get<ExamSubmissionStatus>(`/submissions/admin/exams/${examId}`),
 
   // 재응시 허용 — submission 삭제 (ADMIN)
   reset: (submissionId: string) =>

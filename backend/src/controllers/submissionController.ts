@@ -97,6 +97,20 @@ export const getSubmissionsByUser = async (
   }
 };
 
+// GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
+export const getSubmissionsByExam = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = await submissionService.getSubmissionsByExam(req.params.examId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // DELETE /submissions/:id/reset — 재응시 허용 (ADMIN)
 export const resetSubmission = async (
   req: AuthRequest,

@@ -92,12 +92,50 @@ export const updateExam = async (id: string, input: UpdateExamInput) => {
   return prisma.exam.update({ where: { id }, data: input });
 };
 
-// 시험 삭제 (ADMIN) — Cascade로 Question, Submission도 자동 삭제
+// 시험 삭제 (ADMIN)
+// 설계 이유: Answer 테이블이 Question/Choice를 FK 참조하지만 Cascade가 없어서
+//   단순 exam.delete() 시 FK 위반 에러 발생.
+//   트랜잭션으로 삭제 순서를 직접 제어하여 해결.
 export const deleteExam = async (id: string) => {
   const exam = await prisma.exam.findUnique({ where: { id } });
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
 
-  await prisma.exam.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    // 1. 이 시험의 Submission ID 목록 조회
+    const submissions = await tx.submission.findMany({
+      where: { examId: id },
+      select: { id: true },
+    });
+    const submissionIds = submissions.map((s) => s.id);
+
+    // 2. Answer 삭제 (Submission FK + Question FK 모두 해소)
+    if (submissionIds.length > 0) {
+      await tx.answer.deleteMany({ where: { submissionId: { in: submissionIds } } });
+    }
+
+    // 3. Submission 삭제
+    await tx.submission.deleteMany({ where: { examId: id } });
+
+    // 4. UserExam 매핑 삭제
+    await tx.userExam.deleteMany({ where: { examId: id } });
+
+    // 5. 이 시험의 Question ID 목록 조회 후 Choice 삭제
+    const questions = await tx.question.findMany({
+      where: { examId: id },
+      select: { id: true },
+    });
+    const questionIds = questions.map((q) => q.id);
+
+    if (questionIds.length > 0) {
+      await tx.choice.deleteMany({ where: { questionId: { in: questionIds } } });
+    }
+
+    // 6. Question 삭제
+    await tx.question.deleteMany({ where: { examId: id } });
+
+    // 7. Exam 삭제
+    await tx.exam.delete({ where: { id } });
+  });
 };
 
 // 시험 공개 처리 (ADMIN)

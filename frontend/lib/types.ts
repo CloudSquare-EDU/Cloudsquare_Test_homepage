@@ -142,3 +142,22 @@ export interface UserSubmissionStatus {
   user: { id: string; name: string; email: string };
   exams: UserExamStatus[];
 }
+
+// 특정 시험의 사용자별 응시 현황
+export interface ExamUserStatus {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  submitted: boolean;
+  submission: {
+    id: string;
+    score: number | null;
+    totalQuestions: number;
+    submittedAt: string;
+  } | null;
+}
+
+export interface ExamSubmissionStatus {
+  exam: { id: string; title: string; duration: number };
+  users: ExamUserStatus[];
+}

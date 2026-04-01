@@ -219,6 +219,45 @@ export const getSubmissionsByUser = async (userId: string) => {
   };
 };
 
+// 특정 시험의 응시 현황 조회 (ADMIN) — 할당된 사용자 + 응시 여부 포함
+export const getSubmissionsByExam = async (examId: string) => {
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    select: { id: true, title: true, duration: true },
+  });
+  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
+
+  // 이 시험에 할당된 사용자 목록
+  const assignments = await prisma.userExam.findMany({
+    where: { examId },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  // 이 시험의 제출 목록
+  const submissions = await prisma.submission.findMany({
+    where: { examId },
+    select: { id: true, userId: true, score: true, totalQuestions: true, submittedAt: true },
+  });
+
+  const submissionMap = new Map(submissions.map((s) => [s.userId, s]));
+
+  return {
+    exam,
+    users: assignments.map((a) => {
+      const sub = submissionMap.get(a.userId) ?? null;
+      return {
+        userId: a.user.id,
+        userName: a.user.name,
+        userEmail: a.user.email,
+        submitted: !!sub,
+        submission: sub,
+      };
+    }),
+  };
+};
+
 // 관리자: 재응시 허용 — 특정 submission 삭제
 export const resetSubmission = async (submissionId: string) => {
   const submission = await prisma.submission.findUnique({ where: { id: submissionId } });

@@ -16,6 +16,14 @@ submissionRoutes.get('/', authenticate, submissionController.getMySubmissions);
 // GET /submissions/admin — 전체 응시 결과 (ADMIN)
 submissionRoutes.get('/admin', authenticate, requireAdmin, submissionController.getAllSubmissions);
 
+// GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
+submissionRoutes.get(
+  '/admin/exams/:examId',
+  authenticate,
+  requireAdmin,
+  submissionController.getSubmissionsByExam,
+);
+
 // GET /submissions/admin/users/:userId — 특정 사용자 응시 현황 (ADMIN)
 submissionRoutes.get(
   '/admin/users/:userId',
