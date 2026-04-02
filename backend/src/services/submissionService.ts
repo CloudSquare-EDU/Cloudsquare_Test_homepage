@@ -36,11 +36,21 @@ export const submitExam = async (input: SubmitInput) => {
   });
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
 
-  // 2. 사용자에게 이 시험이 할당되어 있는지 확인
-  const assignment = await prisma.userExam.findUnique({
-    where: { userId_examId: { userId, examId } },
-  });
-  if (!assignment) {
+  // 2. 응시 권한 확인: UserExam 직접 할당 OR 과정(course) 기반 접근
+  const [assignment, user] = await Promise.all([
+    prisma.userExam.findUnique({
+      where: { userId_examId: { userId, examId } },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { courseId: true },
+    }),
+  ]);
+
+  const hasDirectAccess = !!assignment;
+  const hasCourseAccess = !!(user?.courseId && exam.courseId && user.courseId === exam.courseId);
+
+  if (!hasDirectAccess && !hasCourseAccess) {
     throw new AppError(403, ErrorCode.FORBIDDEN, '이 시험에 대한 응시 권한이 없습니다.');
   }
 

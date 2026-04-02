@@ -310,8 +310,8 @@ export default function ExamPage() {
                         className={`
                           flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors
                           ${isSelected
-                            ? 'border-[#5e6ad2] bg-[#1e2245] text-[var(--text-primary)]'
-                            : 'border-[var(--border)] bg-[var(--sidebar-bg)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
+                            ? 'border-[#5e6ad2] bg-[rgba(94,106,210,0.1)] text-[var(--text-primary)]'
+                            : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
                           }
                         `}
                       >
@@ -336,14 +336,14 @@ export default function ExamPage() {
                       className={`
                         flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm transition-colors
                         ${isSelected
-                          ? 'border-[#5e6ad2] bg-[#1e2245] text-[var(--text-primary)]'
-                          : 'border-[var(--border)] bg-[var(--sidebar-bg)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
+                          ? 'border-[#5e6ad2] bg-[rgba(94,106,210,0.1)] text-[var(--text-primary)]'
+                          : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
                         }
                       `}
                     >
                       <span className={`
                         flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-mono
-                        ${isSelected ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[#2e2e42] text-[var(--text-faint)]'}
+                        ${isSelected ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[var(--border-hover)] text-[var(--text-faint)]'}
                       `}>
                         {choice.order}
                       </span>
