@@ -18,35 +18,75 @@ interface UpdateExamInput {
   duration?: number;
 }
 
-// 해당 사용자에게 할당된 공개 시험 목록 조회 (USER용)
-// UserExam 매핑이 없으면 빈 배열 반환
+// 해당 사용자에게 할당된 시험 목록 조회 (USER용)
+// 1) 직접 UserExam 매핑된 시험
+// 2) 사용자가 속한 과정의 시험
+// 두 경우 모두 포함 (중복 제거)
 export const getAssignedExamsForUser = async (userId: string) => {
-  const mappings = await prisma.userExam.findMany({
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { courseId: true },
+  });
+
+  // UserExam 직접 매핑
+  const directMappings = await prisma.userExam.findMany({
     where: { userId },
     include: {
       exam: {
-        include: { _count: { select: { questions: true } } },
+        include: {
+          _count: { select: { questions: true } },
+          course: { select: { id: true, name: true } },
+        },
       },
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  // 관리자가 명시적으로 할당한 시험은 isPublished 여부와 무관하게 표시
-  return mappings.map((m) => ({
-    id: m.exam.id,
-    title: m.exam.title,
-    description: m.exam.description,
-    duration: m.exam.duration,
-    questionCount: m.exam._count.questions,
-    createdAt: m.exam.createdAt,
-  }));
+  const directExamIds = new Set(directMappings.map((m) => m.examId));
+
+  // 과정 기반 시험 (직접 매핑된 것 제외)
+  const courseExams = user?.courseId
+    ? await prisma.exam.findMany({
+        where: {
+          courseId: user.courseId,
+          id: { notIn: [...directExamIds] },
+        },
+        include: {
+          _count: { select: { questions: true } },
+          course: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+
+  const toDto = (exam: {
+    id: string; title: string; description: string | null; duration: number;
+    createdAt: Date; _count: { questions: number };
+    course: { id: string; name: string } | null;
+  }) => ({
+    id: exam.id,
+    title: exam.title,
+    description: exam.description,
+    duration: exam.duration,
+    questionCount: exam._count.questions,
+    createdAt: exam.createdAt,
+    course: exam.course,
+  });
+
+  return [
+    ...directMappings.map((m) => toDto(m.exam)),
+    ...courseExams.map(toDto),
+  ];
 };
 
-// 전체 시험 목록 (ADMIN용)
+// 전체 시험 목록 (ADMIN용) — 과정 정보 포함
 export const getAllExams = async () => {
   return prisma.exam.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { questions: true, submissions: true } } },
+    include: {
+      _count: { select: { questions: true, submissions: true } },
+      course: { select: { id: true, name: true } },
+    },
   });
 };
 

@@ -17,7 +17,7 @@ interface CreateUserInput {
   role?: Role;
 }
 
-// 전체 사용자 목록 조회 (비밀번호 제외)
+// 전체 사용자 목록 조회 (비밀번호 제외, 과정 정보 포함)
 export const getAllUsers = async () => {
   return prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
@@ -26,7 +26,9 @@ export const getAllUsers = async () => {
       email: true,
       name: true,
       role: true,
+      courseId: true,
       createdAt: true,
+      course: { select: { id: true, name: true } },
       _count: { select: { submissions: true, userExams: true } },
     },
   });

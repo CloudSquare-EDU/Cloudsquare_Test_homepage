@@ -4,7 +4,8 @@
 import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
-import { AdminExam } from '@/lib/types';
+import { coursesApi } from '@/lib/api/courses';
+import { AdminExam, CourseSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -20,11 +21,18 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', duration: 3600 });
+  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '' });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 과정 목록
+  const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
+
+  // 과정 변경 모달
+  const [courseTarget, setCourseTarget] = useState<AdminExam | null>(null);
+  const [isAssigningCourse, setIsAssigningCourse] = useState(false);
 
   const loadExams = () => {
     examsApi.getAllAdmin()
@@ -33,16 +41,38 @@ export default function AdminExamsPage() {
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadExams(); }, []);
+  const loadCourses = () => {
+    coursesApi.getAll()
+      .then(setAllCourses)
+      .catch(() => { /* 과정 로드 실패는 무시 */ });
+  };
+
+  useEffect(() => {
+    loadExams();
+    loadCourses();
+  }, []);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
     setError(null);
     try {
-      await examsApi.create({ title: form.title, description: form.description || undefined, duration: form.duration });
+      await examsApi.create({
+        title: form.title,
+        description: form.description || undefined,
+        duration: form.duration,
+      });
+      // 시험 생성 후 과정 매핑
+      if (form.courseId) {
+        const created = await examsApi.getAllAdmin();
+        // 방금 만든 시험 찾기 (제목 기준)
+        const newExam = created.find((e) => e.title === form.title);
+        if (newExam) {
+          await coursesApi.assignExam(form.courseId, newExam.id);
+        }
+      }
       setShowCreate(false);
-      setForm({ title: '', description: '', duration: 3600 });
+      setForm({ title: '', description: '', duration: 3600, courseId: '' });
       loadExams();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '생성 중 오류가 발생했습니다.');
@@ -65,6 +95,38 @@ export default function AdminExamsPage() {
     }
   };
 
+  // ── 과정 변경 ───────────────────────────────────────────────
+  const handleAssignCourse = async (courseId: string) => {
+    if (!courseTarget) return;
+    setIsAssigningCourse(true);
+    try {
+      await coursesApi.assignExam(courseId, courseTarget.id);
+      const course = allCourses.find((c) => c.id === courseId);
+      if (course) {
+        setCourseTarget((prev) => prev ? { ...prev, courseId: courseId, course: { id: courseId, name: course.name } } : prev);
+      }
+      loadExams();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '과정 매핑 중 오류가 발생했습니다.');
+    } finally {
+      setIsAssigningCourse(false);
+    }
+  };
+
+  const handleRemoveCourse = async () => {
+    if (!courseTarget || !courseTarget.courseId) return;
+    setIsAssigningCourse(true);
+    try {
+      await coursesApi.removeExam(courseTarget.courseId, courseTarget.id);
+      setCourseTarget((prev) => prev ? { ...prev, courseId: null, course: null } : prev);
+      loadExams();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '과정 해제 중 오류가 발생했습니다.');
+    } finally {
+      setIsAssigningCourse(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -79,7 +141,7 @@ export default function AdminExamsPage() {
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">시험 관리</h1>
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-            시험 생성 후 사용자 관리에서 개별 할당하세요
+            시험 생성 시 과정을 매핑하거나, 목록에서 과정을 변경할 수 있습니다
           </p>
         </div>
         <Button onClick={() => setShowCreate((v) => !v)} size="sm">
@@ -136,6 +198,25 @@ export default function AdminExamsPage() {
                 />
               </div>
             </div>
+            {/* 과정 매핑 (선택) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">과정 매핑 (선택)</label>
+              <select
+                value={form.courseId}
+                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+              >
+                <option value="">과정 없음</option>
+                {allCourses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {form.courseId && (
+                <p className="text-[10px] text-[var(--text-faint)]">
+                  이 과정에 속한 계정들은 시험에 자동으로 접근할 수 있습니다.
+                </p>
+              )}
+            </div>
             <div className="flex justify-end pt-1">
               <Button type="submit" isLoading={isCreating} size="sm">생성</Button>
             </div>
@@ -163,7 +244,23 @@ export default function AdminExamsPage() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
+                  {/* 과정 배지 */}
+                  {exam.course && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                      {exam.course.name}
+                    </span>
+                  )}
+                  {/* 공개 상태 */}
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    exam.isPublished
+                      ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+                      : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                  }`}>
+                    {exam.isPublished ? '공개' : '비공개'}
+                  </span>
+                </div>
                 <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span>문제 {exam._count.questions}개</span>
                   <span>·</span>
@@ -172,7 +269,10 @@ export default function AdminExamsPage() {
                   <span>{formatDuration(exam.duration)}</span>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setCourseTarget(exam)}>
+                  과정 변경
+                </Button>
                 <Link href={`/admin/exams/${exam.id}/questions`}>
                   <Button variant="secondary" size="sm">문제 관리</Button>
                 </Link>
@@ -195,6 +295,86 @@ export default function AdminExamsPage() {
         onCancel={() => setDeleteTargetId(null)}
         isLoading={isDeleting}
       />
+
+      {/* ── 과정 변경 모달 ── */}
+      {courseTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setCourseTarget(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 변경</h2>
+            <p className="mb-1 text-sm text-[var(--text-muted)]">
+              <span className="text-[var(--text-secondary)]">{courseTarget.title}</span>을(를) 매핑할 과정을 선택하세요.
+            </p>
+
+            {/* 현재 과정 */}
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-[var(--text-faint)]">현재 과정:</span>
+              {courseTarget.course ? (
+                <div className="flex items-center gap-2">
+                  <span className="rounded px-2 py-0.5 text-xs font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                    {courseTarget.course.name}
+                  </span>
+                  <button
+                    onClick={handleRemoveCourse}
+                    disabled={isAssigningCourse}
+                    className="text-[10px] text-[var(--danger-text)] hover:underline disabled:opacity-50"
+                  >
+                    해제
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-[var(--text-faint)]">없음</span>
+              )}
+            </div>
+
+            <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
+              {allCourses.length === 0 ? (
+                <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 과정이 없습니다.</p>
+              ) : (
+                allCourses.map((course) => {
+                  const isSelected = courseTarget.courseId === course.id;
+                  return (
+                    <button
+                      key={course.id}
+                      onClick={() => handleAssignCourse(course.id)}
+                      disabled={isAssigningCourse || isSelected}
+                      className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:cursor-default ${
+                        isSelected
+                          ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)] opacity-80'
+                          : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                      }`}
+                    >
+                      <div>
+                        <p className={`font-medium ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                          {course.name}
+                        </p>
+                        {course.description && (
+                          <p className="mt-0.5 text-xs text-[var(--text-faint)] truncate max-w-[240px]">{course.description}</p>
+                        )}
+                        <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                          사용자 {course._count.users}명 · 시험 {course._count.exams}개
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium bg-[#5e6ad2] text-white">
+                          현재
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <Button size="sm" onClick={() => setCourseTarget(null)}>완료</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

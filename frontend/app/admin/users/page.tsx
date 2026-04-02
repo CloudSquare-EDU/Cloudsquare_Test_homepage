@@ -5,7 +5,8 @@ import { useEffect, useState, useRef, FormEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { usersApi, UserSummary, AssignedUser, BulkUserInput } from '@/lib/api/users';
 import { examsApi } from '@/lib/api/exams';
-import { AdminExam } from '@/lib/types';
+import { coursesApi } from '@/lib/api/courses';
+import { AdminExam, CourseSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -44,10 +45,17 @@ export default function AdminUsersPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 시험 할당 모달
   const [assignTarget, setAssignTarget] = useState<UserSummary | null>(null);
   const [allExams, setAllExams] = useState<AdminExam[]>([]);
   const [assignedExamIds, setAssignedExamIds] = useState<Set<string>>(new Set());
   const [isLoadingExams, setIsLoadingExams] = useState(false);
+
+  // 과정 배정 모달
+  const [courseTarget, setCourseTarget] = useState<UserSummary | null>(null);
+  const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+  const [isAssigningCourse, setIsAssigningCourse] = useState(false);
 
   const loadUsers = () => {
     setIsLoading(true);
@@ -162,6 +170,7 @@ export default function AdminUsersPage() {
     }
   };
 
+  // ── 시험 할당 ───────────────────────────────────────────────
   const openAssignModal = async (user: UserSummary) => {
     setAssignTarget(user);
     setIsLoadingExams(true);
@@ -199,6 +208,50 @@ export default function AdminUsersPage() {
     }
   };
 
+  // ── 과정 배정 ───────────────────────────────────────────────
+  const openCourseModal = async (user: UserSummary) => {
+    setCourseTarget(user);
+    setIsLoadingCourses(true);
+    try {
+      const courses = await coursesApi.getAll();
+      setAllCourses(courses);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
+  const handleAssignCourse = async (courseId: string) => {
+    if (!courseTarget) return;
+    setIsAssigningCourse(true);
+    try {
+      await coursesApi.assignUser(courseId, courseTarget.id);
+      loadUsers();
+      // 모달 내 courseTarget 갱신 (배지 업데이트)
+      const course = allCourses.find((c) => c.id === courseId);
+      if (course) {
+        setCourseTarget((prev) => prev ? { ...prev, courseId: courseId, course: { id: courseId, name: course.name } } : prev);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '과정 배정 중 오류가 발생했습니다.');
+    } finally {
+      setIsAssigningCourse(false);
+    }
+  };
+
+  const handleRemoveCourse = async () => {
+    if (!courseTarget || !courseTarget.courseId) return;
+    setIsAssigningCourse(true);
+    try {
+      await coursesApi.removeUser(courseTarget.courseId, courseTarget.id);
+      loadUsers();
+      setCourseTarget((prev) => prev ? { ...prev, courseId: null, course: null } : prev);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '과정 해제 중 오류가 발생했습니다.');
+    } finally {
+      setIsAssigningCourse(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -213,7 +266,7 @@ export default function AdminUsersPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">사용자 관리</h1>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">계정 생성 및 시험 할당을 관리하세요</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">계정 생성 및 시험/과정 할당을 관리하세요</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -376,13 +429,19 @@ export default function AdminUsersPage() {
 
               {/* 사용자 정보 */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-[var(--text-primary)] truncate">{user.name}</p>
                   <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                     user.role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
                   }`}>
                     {user.role === 'ADMIN' ? '관리자' : '일반'}
                   </span>
+                  {/* 과정 배지 */}
+                  {user.course && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                      {user.course.name}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span>{user.email}</span>
@@ -394,7 +453,10 @@ export default function AdminUsersPage() {
               </div>
 
               {/* 액션 버튼 */}
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                <Button variant="secondary" size="sm" onClick={() => openCourseModal(user)}>
+                  과정 배정
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => openAssignModal(user)}>
                   시험 할당
                 </Button>
@@ -422,7 +484,91 @@ export default function AdminUsersPage() {
         isLoading={isDeleting}
       />
 
-      {/* 시험 할당 모달 */}
+      {/* ── 과정 배정 모달 ── */}
+      {courseTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setCourseTarget(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 배정</h2>
+            <p className="mb-1 text-sm text-[var(--text-muted)]">
+              <span className="text-[var(--text-secondary)]">{courseTarget.name}</span>을(를) 배정할 과정을 선택하세요.
+            </p>
+
+            {/* 현재 과정 표시 */}
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-[var(--text-faint)]">현재 과정:</span>
+              {courseTarget.course ? (
+                <div className="flex items-center gap-2">
+                  <span className="rounded px-2 py-0.5 text-xs font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                    {courseTarget.course.name}
+                  </span>
+                  <button
+                    onClick={handleRemoveCourse}
+                    disabled={isAssigningCourse}
+                    className="text-[10px] text-[var(--danger-text)] hover:underline disabled:opacity-50"
+                  >
+                    해제
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-[var(--text-faint)]">없음</span>
+              )}
+            </div>
+
+            {isLoadingCourses ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+              </div>
+            ) : allCourses.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 과정이 없습니다.</p>
+            ) : (
+              <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
+                {allCourses.map((course) => {
+                  const isSelected = courseTarget.courseId === course.id;
+                  return (
+                    <button
+                      key={course.id}
+                      onClick={() => handleAssignCourse(course.id)}
+                      disabled={isAssigningCourse || isSelected}
+                      className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:cursor-default ${
+                        isSelected
+                          ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)] opacity-80'
+                          : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                      }`}
+                    >
+                      <div>
+                        <p className={`font-medium ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                          {course.name}
+                        </p>
+                        {course.description && (
+                          <p className="mt-0.5 text-xs text-[var(--text-faint)] truncate max-w-[240px]">{course.description}</p>
+                        )}
+                        <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                          사용자 {course._count.users}명 · 시험 {course._count.exams}개
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium bg-[#5e6ad2] text-white">
+                          현재
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <Button size="sm" onClick={() => setCourseTarget(null)}>완료</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 시험 할당 모달 ── */}
       {assignTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -461,6 +607,7 @@ export default function AdminUsersPage() {
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--text-faint)]">
                           문제 {exam._count?.questions ?? 0}개 · {formatDuration(exam.duration)}
+                          {exam.course && <span className="ml-2 text-[#5e6ad2]">· {exam.course.name}</span>}
                         </p>
                       </div>
                       <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium ${

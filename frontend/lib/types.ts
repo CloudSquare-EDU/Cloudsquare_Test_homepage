@@ -26,6 +26,7 @@ export interface ExamSummary {
   questionCount: number;
   isPublished?: boolean;
   createdAt: string;
+  course?: { id: string; name: string } | null;
 }
 
 export interface Choice {
@@ -97,6 +98,24 @@ export interface SubmissionDetail extends SubmissionSummary {
   }>;
 }
 
+// ─── Course ──────────────────────────────────────────────────
+export interface CourseSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  _count: { users: number; exams: number };
+}
+
+export interface CourseDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  users: Array<{ id: string; name: string; email: string; role: Role }>;
+  exams: Array<{ id: string; title: string; duration: number; isPublished: boolean }>;
+}
+
 // ─── API 응답 공통 래퍼 ──────────────────────────────────────
 export interface ApiResponse<T> {
   success: boolean;
@@ -110,6 +129,8 @@ export interface ApiResponse<T> {
 // ─── 관리자 시험 목록 ─────────────────────────────────────────
 export interface AdminExam extends ExamSummary {
   isPublished: boolean;
+  courseId: string | null;
+  course: { id: string; name: string } | null;
   _count: {
     questions: number;
     submissions: number;

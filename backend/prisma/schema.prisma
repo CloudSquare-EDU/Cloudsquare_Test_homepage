@@ -1,6 +1,5 @@
-// Prisma Schema — MockExam Platform
+// Prisma Schema — 모의시험 플랫폼
 // Database: PostgreSQL
-// 역할: 6개 모델 정의 및 모든 관계 선언
 
 generator client {
   provider = "prisma-client-js"
@@ -11,12 +10,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────
-// 사용자 역할 Enum
-// ─────────────────────────────────────────
 enum Role {
   USER
   ADMIN
+}
+
+// ─────────────────────────────────────────
+// Course — 과정 (e.g. "OO대학교 네이버클라우드 아카데미")
+// 여러 계정과 여러 시험을 묶는 단위
+// ─────────────────────────────────────────
+model Course {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+  exams Exam[]
+
+  @@map("courses")
 }
 
 // ─────────────────────────────────────────
@@ -25,15 +38,18 @@ enum Role {
 model User {
   id          String       @id @default(cuid())
   email       String       @unique
-  password    String       // bcrypt 해시 저장
+  password    String
   name        String
   role        Role         @default(USER)
+  courseId    String?      // 소속 과정 (nullable)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
   submissions Submission[]
   userExams   UserExam[]
 
+  @@index([courseId])
   @@map("users")
 }
 
@@ -44,15 +60,18 @@ model Exam {
   id          String       @id @default(cuid())
   title       String
   description String?
-  duration    Int          // 제한 시간 (초 단위, ex: 3600 = 60분)
+  duration    Int
   isPublished Boolean      @default(false)
+  courseId    String?      // 소속 과정 (nullable)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
   questions   Question[]
   submissions Submission[]
   userExams   UserExam[]
 
+  @@index([courseId])
   @@map("exams")
 }
 
@@ -63,7 +82,7 @@ model Question {
   id        String   @id @default(cuid())
   examId    String
   content   String
-  order     Int      // 문제 표시 순서
+  order     Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -77,15 +96,13 @@ model Question {
 
 // ─────────────────────────────────────────
 // Choice — 선택지
-// isCorrect 필드는 Backend 채점에만 사용
-// Frontend 응답 시 이 필드는 반드시 제외
 // ─────────────────────────────────────────
 model Choice {
   id         String   @id @default(cuid())
   questionId String
   content    String
   isCorrect  Boolean  @default(false)
-  order      Int      // 선택지 표시 순서
+  order      Int
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   answers  Answer[]
@@ -96,13 +113,12 @@ model Choice {
 
 // ─────────────────────────────────────────
 // Submission — 응시 기록
-// 한 사용자가 한 시험을 여러 번 응시 가능
 // ─────────────────────────────────────────
 model Submission {
   id             String   @id @default(cuid())
   userId         String
   examId         String
-  score          Int?     // 채점 완료 후 설정 (즉시 채점이므로 제출 시 바로 저장)
+  score          Int?
   totalQuestions Int
   submittedAt    DateTime @default(now())
   createdAt      DateTime @default(now())
@@ -117,9 +133,8 @@ model Submission {
 }
 
 // ─────────────────────────────────────────
-// UserExam — 시험-사용자 매핑
-// 관리자가 특정 사용자에게 시험을 할당
-// isAssigned=false인 시험은 해당 유저에게 노출되지 않음
+// UserExam — 시험-사용자 개별 매핑 (기존 유지)
+// Course 매핑과 별개로, 특정 사용자에게 개별 시험 할당 가능
 // ─────────────────────────────────────────
 model UserExam {
   id        String   @id @default(cuid())
@@ -130,7 +145,7 @@ model UserExam {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, examId]) // 동일 유저-시험 중복 할당 방지
+  @@unique([userId, examId])
   @@index([userId])
   @@index([examId])
   @@map("user_exams")
@@ -138,20 +153,18 @@ model UserExam {
 
 // ─────────────────────────────────────────
 // Answer — 개별 답안
-// Submission 하나당 문제 수만큼 Answer 생성
 // ─────────────────────────────────────────
 model Answer {
   id           String  @id @default(cuid())
   submissionId String
   questionId   String
   choiceId     String
-  isCorrect    Boolean // 채점 시 결정하여 저장
+  isCorrect    Boolean
 
   submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   question   Question   @relation(fields: [questionId], references: [id])
   choice     Choice     @relation(fields: [choiceId], references: [id])
 
-  // @@unique 제거: 복수 정답 문제에서 한 문제에 여러 선택지 저장 허용
   @@index([submissionId])
   @@map("answers")
 }

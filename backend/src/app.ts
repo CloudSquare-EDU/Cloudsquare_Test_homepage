@@ -7,6 +7,7 @@ import 'dotenv/config';
 
 import { errorHandler } from './middlewares/errorHandler';
 import { authRoutes } from './routes/authRoutes';
+import { courseRoutes } from './routes/courseRoutes';
 import { examRoutes } from './routes/examRoutes';
 import { questionRoutes } from './routes/questionRoutes';
 import { submissionRoutes } from './routes/submissionRoutes';
@@ -35,6 +36,7 @@ export const createApp = (): express.Application => {
 
   // ─── API 라우트 ────────────────────────────────────────────
   app.use('/auth', authRoutes);
+  app.use('/courses', courseRoutes);
   app.use('/exams', examRoutes);
   app.use('/questions', questionRoutes);
   app.use('/submissions', submissionRoutes);

@@ -49,6 +49,13 @@ const IcHistory = () => (
   </svg>
 );
 
+const IcCourse = () => (
+  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M8 2L1 5.5l7 3.5 7-3.5L8 2z" strokeLinejoin="round" />
+    <path d="M1 5.5v4M4 7.2v3.3c0 1 1.79 1.8 4 1.8s4-.8 4-1.8V7.2" strokeLinecap="round" />
+  </svg>
+);
+
 const IcLogout = () => (
   <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" strokeLinecap="round" strokeLinejoin="round" />
@@ -72,6 +79,7 @@ const USER_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { label: '대시보드', href: '/admin', shortcutKey: 'h', exact: true, icon: <IcGrid /> },
+  { label: '과정 관리', href: '/admin/courses', shortcutKey: 'c', icon: <IcCourse /> },
   { label: '시험 관리', href: '/admin/exams', shortcutKey: 'e', icon: <IcDoc /> },
   { label: '사용자 관리', href: '/admin/users', shortcutKey: 'u', icon: <IcUsers /> },
   { label: '응시 결과', href: '/admin/results', shortcutKey: 'r', icon: <IcChart /> },
@@ -319,9 +327,9 @@ export const Sidebar = () => {
                   <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.22 3.22l1.42 1.42M11.36 11.36l1.42 1.42M3.22 12.78l1.42-1.42M11.36 4.64l1.42-1.42" strokeLinecap="round" />
                 </svg>
               ) : (
-                /* Moon icon */
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M13.5 10.5A6 6 0 015.5 2.5a6 6 0 100 11 6 6 0 008-3z" strokeLinecap="round" strokeLinejoin="round" />
+                /* Moon icon (Bootstrap Icons moon-fill) */
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
                 </svg>
               )}
             </button>

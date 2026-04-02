@@ -8,6 +8,8 @@ export interface UserSummary {
   email: string;
   name: string;
   role: 'USER' | 'ADMIN';
+  courseId: string | null;
+  course: { id: string; name: string } | null;
   createdAt: string;
   _count: { submissions: number; userExams: number };
 }
