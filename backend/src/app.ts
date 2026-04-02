@@ -3,6 +3,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import 'dotenv/config';
 
 import { errorHandler } from './middlewares/errorHandler';
@@ -17,6 +18,9 @@ import { userRoutes } from './routes/userRoutes';
 export const createApp = (): express.Application => {
   const app = express();
 
+  // ─── Gzip 압축 (응답 크기 50~70% 감소) ──────────────────────
+  app.use(compression());
+
   // ─── CORS 설정 ───────────────────────────────────────────
   // Netlify 프론트엔드 도메인만 허용
   app.use(
@@ -26,9 +30,9 @@ export const createApp = (): express.Application => {
     }),
   );
 
-  // ─── Body Parser ─────────────────────────────────────────
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // ─── Body Parser (요청 크기 1MB 제한) ────────────────────
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // ─── Health Check ─────────────────────────────────────────
   app.get('/health', (_req, res) => {

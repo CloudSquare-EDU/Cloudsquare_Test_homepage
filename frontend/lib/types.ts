@@ -102,6 +102,16 @@ export interface SubmissionDetail extends SubmissionSummary {
   }>;
 }
 
+// 홈 화면용 — 시험 + 응시 여부 통합 타입 (GET /exams/my)
+export interface ExamWithSubmission extends ExamSummary {
+  submission: {
+    id: string;
+    score: number | null;
+    totalQuestions: number;
+    submittedAt: string;
+  } | null;
+}
+
 // ─── Question Bank ───────────────────────────────────────────
 export interface BankChoiceSummary {
   id: string;

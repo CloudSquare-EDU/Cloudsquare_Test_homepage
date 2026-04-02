@@ -21,6 +21,24 @@ const submitSchema = z.object({
     .min(1, '최소 하나 이상의 답안이 필요합니다.'),
 });
 
+// GET /submissions/check/exam/:examId — 특정 시험의 내 응시 여부 확인 (단건 조회)
+export const checkMySubmissionForExam = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    if (!req.user) throw new AppError(401, ErrorCode.UNAUTHORIZED, '인증이 필요합니다.');
+    const result = await submissionService.checkMySubmissionForExam(
+      req.user.userId,
+      req.params.examId,
+    );
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const submitExam = async (
   req: AuthRequest,
   res: Response,

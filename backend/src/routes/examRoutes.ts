@@ -7,6 +7,10 @@ import * as examController from '../controllers/examController';
 
 export const examRoutes: Router = Router();
 
+// GET /exams/my — USER: 시험 목록 + 응시 상태 통합 (홈 화면 단일 호출)
+// 반드시 /:id 보다 먼저 선언해야 "my"가 :id로 매칭되지 않음
+examRoutes.get('/my', authenticate, examController.getMyExams);
+
 // GET /exams — USER: 공개 목록, ADMIN: 전체 목록
 examRoutes.get('/', authenticate, examController.getExams);
 

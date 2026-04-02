@@ -77,35 +77,37 @@ export const getOrCreateAssignment = async (userId: string, examId: string) => {
   const picked = shuffle(allQuestions).slice(0, pickCount);
 
   // UserExamQuestion 일괄 저장
+  const pickedWithOrder = picked.map((q, idx) => ({ bankQuestionId: q.id, assignedOrder: idx + 1 }));
   await prisma.userExamQuestion.createMany({
-    data: picked.map((q, idx) => ({
+    data: pickedWithOrder.map(({ bankQuestionId, assignedOrder }) => ({
       userId,
       examId,
-      bankQuestionId: q.id,
-      assignedOrder: idx + 1,
+      bankQuestionId,
+      assignedOrder,
     })),
   });
 
-  // 저장된 문제 상세 반환
-  const created = await prisma.userExamQuestion.findMany({
-    where: { userId, examId },
-    orderBy: { assignedOrder: 'asc' },
-    include: {
-      bankQuestion: {
-        include: {
-          choices: { orderBy: { order: 'asc' } },
-        },
-      },
-    },
+  // createMany는 생성된 레코드를 반환하지 않으므로,
+  // picked ID 목록으로 최소한의 쿼리 1회만 실행 (전체 테이블 재조회 방지)
+  const pickedIds = pickedWithOrder.map((p) => p.bankQuestionId);
+  const questions = await prisma.bankQuestion.findMany({
+    where: { id: { in: pickedIds } },
+    include: { choices: { orderBy: { order: 'asc' } } },
   });
 
-  return created.map((ueq) => ({
-    id: ueq.bankQuestion.id,
-    content: ueq.bankQuestion.content,
-    order: ueq.assignedOrder,
-    choices: ueq.bankQuestion.choices.map(({ isCorrect: _removed, ...rest }) => rest),
-    answerCount: ueq.bankQuestion.choices.filter((c) => c.isCorrect).length,
-  }));
+  // DB 반환 순서가 보장되지 않으므로 Map으로 O(1) 정렬
+  const qMap = new Map(questions.map((q) => [q.id, q]));
+
+  return pickedWithOrder.map(({ bankQuestionId, assignedOrder }) => {
+    const q = qMap.get(bankQuestionId)!;
+    return {
+      id: q.id,
+      content: q.content,
+      order: assignedOrder,
+      choices: q.choices.map(({ isCorrect: _removed, ...rest }) => rest),
+      answerCount: q.choices.filter((c) => c.isCorrect).length,
+    };
+  });
 };
 
 // 배정 초기화 (재응시 시 호출)

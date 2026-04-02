@@ -83,6 +83,25 @@ export const getAssignedExamsForUser = async (userId: string) => {
   ];
 };
 
+// 사용자 시험 목록 + 응시 여부 통합 조회 (USER 홈 화면용)
+// 설계 이유: 기존에는 프론트에서 /exams + /submissions 두 번 호출했으나,
+//   DB 쿼리를 서버에서 Promise.all로 병렬 실행 후 합쳐서 한 번에 내려줌 (왕복 1회 감소)
+export const getAssignedExamsWithSubmissions = async (userId: string) => {
+  const [exams, submissions] = await Promise.all([
+    getAssignedExamsForUser(userId),
+    prisma.submission.findMany({
+      where: { userId },
+      select: { id: true, examId: true, score: true, totalQuestions: true, submittedAt: true },
+    }),
+  ]);
+
+  const subMap = new Map(submissions.map((s) => [s.examId, s]));
+  return exams.map((exam) => ({
+    ...exam,
+    submission: subMap.get(exam.id) ?? null,
+  }));
+};
+
 // 전체 시험 목록 (ADMIN용) — 과정 + 문제은행 정보 포함
 export const getAllExams = async () => {
   return prisma.exam.findMany({

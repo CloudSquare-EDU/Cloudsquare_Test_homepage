@@ -23,6 +23,21 @@ const updateExamSchema = z.object({
   questionCount: z.number().int().positive().nullable().optional(),
 });
 
+// GET /exams/my — 사용자 시험 목록 + 응시 상태 통합 반환 (홈 화면 단일 호출용)
+export const getMyExams = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    if (!req.user) throw new Error('인증 필요');
+    const data = await examService.getAssignedExamsWithSubmissions(req.user.userId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getExams = async (
   req: AuthRequest,
   res: Response,

@@ -2,9 +2,12 @@
 // 역할: 시험 관련 API 함수 모음
 
 import { apiClient } from './client';
-import { ExamSummary, ExamDetail, AdminExam } from '../types';
+import { ExamSummary, ExamDetail, AdminExam, ExamWithSubmission } from '../types';
 
 export const examsApi = {
+  // 홈 화면용 — 시험 목록 + 응시 상태를 한 번에 조회 (API 콜 2→1)
+  getMy: () => apiClient.get<ExamWithSubmission[]>('/exams/my'),
+
   getAll: () => apiClient.get<ExamSummary[]>('/exams'),
 
   getAllAdmin: () => apiClient.get<AdminExam[]>('/exams'),

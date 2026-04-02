@@ -211,6 +211,7 @@ model Submission {
 
   @@index([userId])
   @@index([examId])
+  @@index([userId, examId])
   @@map("submissions")
 }
 
@@ -257,5 +258,7 @@ model Answer {
   bankChoice   BankChoice?   @relation(fields: [bankChoiceId], references: [id])
 
   @@index([submissionId])
+  @@index([bankQuestionId])
+  @@index([questionId])
   @@map("answers")
 }

@@ -6,24 +6,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { examsApi } from '@/lib/api/exams';
-import { submissionsApi } from '@/lib/api/submissions';
-import { ExamSummary, SubmissionSummary } from '@/lib/types';
+import { ExamWithSubmission } from '@/lib/types';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Button } from '@/components/ui/Button';
-
-const formatDuration = (seconds: number) => {
-  if (seconds === 0) return '제한 없음';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}분`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
-};
+import { formatDuration } from '@/lib/utils';
 
 export default function HomePage() {
   const { user, isInitialized } = useAuthStore();
   const router = useRouter();
-  const [exams, setExams] = useState<ExamSummary[]>([]);
-  const [submissionMap, setSubmissionMap] = useState<Record<string, SubmissionSummary>>({});
+  const [exams, setExams] = useState<ExamWithSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,12 +27,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!isInitialized || !user || user.role === 'ADMIN') { setIsLoading(false); return; }
 
-    Promise.all([examsApi.getAll(), submissionsApi.getMy()])
-      .then(([examList, submissions]) => {
+    examsApi.getMy()
+      .then((examList) => {
         setExams(examList);
-        const map: Record<string, SubmissionSummary> = {};
-        submissions.forEach((s) => { map[s.exam.id] = s; });
-        setSubmissionMap(map);
       })
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
@@ -93,7 +81,7 @@ export default function HomePage() {
       ) : (
         <div className="flex flex-col gap-2">
           {exams.map((exam) => {
-            const submission = submissionMap[exam.id];
+            const submission = exam.submission;
             const done = !!submission;
 
             return (

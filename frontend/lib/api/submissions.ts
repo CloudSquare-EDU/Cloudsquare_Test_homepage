@@ -37,9 +37,7 @@ export const submissionsApi = {
   reset: (submissionId: string) =>
     apiClient.delete<{ message: string }>(`/submissions/${submissionId}/reset`),
 
-  // 특정 시험의 내 제출 여부 확인
-  checkExamSubmission: (examId: string) =>
-    apiClient.get<SubmissionSummary[]>('/submissions').then(
-      (list) => list.find((s) => s.exam.id === examId) ?? null,
-    ),
+  // 특정 시험의 내 제출 여부 확인 — 전용 엔드포인트로 단건 조회 (전체 목록 로드 불필요)
+  checkExamById: (examId: string) =>
+    apiClient.get<SubmissionSummary | null>(`/submissions/check/exam/${examId}`),
 };

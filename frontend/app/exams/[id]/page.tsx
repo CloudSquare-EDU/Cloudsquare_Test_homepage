@@ -4,12 +4,13 @@
 // localStorage로 답안 자동 저장/복원
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
 import { ExamDetail, SubmissionSummary } from '@/lib/types';
+import { formatDuration } from '@/lib/utils';
 import { useTimer } from '@/lib/hooks/useTimer';
 import { Timer } from '@/components/ui/Timer';
 import { Button } from '@/components/ui/Button';
@@ -17,14 +18,6 @@ import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
 
 type ExamPhase = 'loading' | 'already-done' | 'intro' | 'in-progress' | 'error';
-
-const formatDuration = (seconds: number) => {
-  if (seconds === 0) return '제한 없음';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}분`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
-};
 
 export default function ExamPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +53,7 @@ export default function ExamPage() {
       try {
         const [examData, prevSub] = await Promise.all([
           examsApi.getById(id),
-          submissionsApi.checkExamSubmission(id),
+          submissionsApi.checkExamById(id),  // 전체 목록 대신 단건 조회
         ]);
         setExam(examData);
         if (prevSub) {
@@ -81,11 +74,17 @@ export default function ExamPage() {
     load();
   }, [id]);
 
-  // 답안 자동 저장 (in-progress 중에만)
+  // 답안 자동 저장 — 500ms debounce (매 keypress마다 localStorage 동기 write 방지)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (phase === 'in-progress') {
+    if (phase !== 'in-progress') return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(answers));
-    }
+    }, 500);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
   }, [answers, phase]);
 
   // 시험 시작 시 페이지 이탈 방지

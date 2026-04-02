@@ -11,12 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
-
-const formatDuration = (s: number) => {
-  if (s === 0) return '제한 없음';
-  if (s < 3600) return `${Math.floor(s / 60)}분`;
-  return `${Math.floor(s / 3600)}시간`;
-};
+import { formatDuration } from '@/lib/utils';
 
 export default function AdminExamsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);

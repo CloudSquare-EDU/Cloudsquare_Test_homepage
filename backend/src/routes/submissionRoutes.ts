@@ -10,6 +10,14 @@ export const submissionRoutes: Router = Router();
 // POST /submissions — 시험 제출 + 즉시 채점
 submissionRoutes.post('/', authenticate, submissionController.submitExam);
 
+// GET /submissions/check/exam/:examId — 특정 시험의 내 응시 여부 단건 확인
+// 반드시 /:id 보다 먼저 선언해야 "check"가 :id로 매칭되지 않음
+submissionRoutes.get(
+  '/check/exam/:examId',
+  authenticate,
+  submissionController.checkMySubmissionForExam,
+);
+
 // GET /submissions — 내 응시 목록
 submissionRoutes.get('/', authenticate, submissionController.getMySubmissions);
 

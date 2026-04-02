@@ -6,20 +6,7 @@ import Link from 'next/link';
 import { submissionsApi } from '@/lib/api/submissions';
 import { SubmissionSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
-
-const scoreColor = (score: number | null) => {
-  if (score === null) return 'text-[var(--text-muted)]';
-  if (score >= 80) return 'text-[var(--success-text)]';
-  if (score >= 60) return 'text-[var(--warning-text)]';
-  return 'text-[var(--danger-text)]';
-};
-
-const scoreBg = (score: number | null) => {
-  if (score === null) return 'bg-[var(--bg-raised)]';
-  if (score >= 80) return 'bg-[var(--success-bg)]';
-  if (score >= 60) return 'bg-[var(--warning-bg)]';
-  return 'bg-[var(--danger-bg)]';
-};
+import { scoreColor, scoreBg } from '@/lib/utils';
 
 export default function SubmissionsPage() {
   const [submissions, setSubmissions] = useState<SubmissionSummary[]>([]);

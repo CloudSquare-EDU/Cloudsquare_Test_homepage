@@ -75,6 +75,9 @@ export const submitExam = async (input: SubmitInput) => {
         `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
     }
 
+    // O(1) 조회를 위한 Map 생성 (기존 O(n²) Array.find 루프 제거)
+    const assignedMap = new Map(assigned.map((a) => [a.bankQuestionId, a]));
+
     type BankAnswerRecord = {
       bankQuestionId: string; bankChoiceId: string; isCorrect: boolean;
     };
@@ -83,7 +86,7 @@ export const submitExam = async (input: SubmitInput) => {
     const questionResultMap: Record<string, { isCorrect: boolean; correctChoiceIds: string[] }> = {};
 
     for (const answer of answers) {
-      const ueq = assigned.find((a) => a.bankQuestionId === answer.questionId);
+      const ueq = assignedMap.get(answer.questionId);
       if (!ueq) {
         throw new AppError(400, ErrorCode.BAD_REQUEST, `배정되지 않은 문제입니다: ${answer.questionId}`);
       }
@@ -147,18 +150,22 @@ export const submitExam = async (input: SubmitInput) => {
       `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
   }
 
+  // O(1) 조회를 위한 Map 생성
+  const questionMap = new Map(exam.questions.map((q) => [q.id, q]));
+
   type ManualAnswerRecord = { questionId: string; choiceId: string; isCorrect: boolean };
   const gradedAnswerRecords: ManualAnswerRecord[] = [];
   let correctCount = 0;
   const questionResultMap: Record<string, { isCorrect: boolean; correctChoiceIds: string[] }> = {};
 
   for (const answer of answers) {
-    const question = exam.questions.find((q) => q.id === answer.questionId);
+    const question = questionMap.get(answer.questionId);
     if (!question) {
       throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 questionId: ${answer.questionId}`);
     }
+    const choiceSet = new Set(question.choices.map((c) => c.id));
     for (const choiceId of answer.choiceIds) {
-      if (!question.choices.some((c) => c.id === choiceId)) {
+      if (!choiceSet.has(choiceId)) {
         throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 choiceId: ${choiceId}`);
       }
     }
@@ -212,6 +219,22 @@ export const submitExam = async (input: SubmitInput) => {
       correctChoiceIds: questionResultMap[questionId]?.correctChoiceIds ?? [],
     })),
   };
+};
+
+// 특정 시험의 내 응시 여부 단일 확인 (기존 getMy() 전체 로드 대체)
+// 설계 이유: 시험 응시 페이지 진입 시 기존에는 전체 submission 목록을 내려받아 클라이언트에서 filter했으나,
+//   이 엔드포인트로 단건 DB 조회만 수행 → 응시 이력이 많아도 일정한 속도 유지
+export const checkMySubmissionForExam = async (userId: string, examId: string) => {
+  return prisma.submission.findFirst({
+    where: { userId, examId },
+    select: {
+      id: true,
+      score: true,
+      totalQuestions: true,
+      submittedAt: true,
+      exam: { select: { id: true, title: true } },
+    },
+  });
 };
 
 // 내 응시 목록 조회

@@ -9,19 +9,7 @@ import { AdminExam, ExamSubmissionStatus, ExamUserStatus } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
-
-const formatDuration = (s: number) => {
-  if (s === 0) return '제한 없음';
-  if (s < 3600) return `${Math.floor(s / 60)}분`;
-  return `${Math.floor(s / 3600)}시간`;
-};
-
-const scoreColor = (score: number | null): string => {
-  if (score === null) return 'text-[var(--text-muted)]';
-  if (score >= 80) return 'text-[var(--success-text)]';
-  if (score >= 60) return 'text-[var(--warning-text)]';
-  return 'text-[var(--danger-text)]';
-};
+import { formatDuration, scoreColor } from '@/lib/utils';
 
 const scoreBadge = (score: number | null): string => {
   if (score === null) return 'bg-[var(--bg-raised)] text-[var(--text-muted)]';
