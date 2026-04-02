@@ -1,7 +1,6 @@
 // courseRoutes.ts
 import { Router } from 'express';
-import { authenticate } from '../middlewares/auth';
-import { requireAdmin } from '../middlewares/requireAdmin';
+import { authenticate, requireAdmin } from '../middlewares/authMiddleware';
 import * as ctrl from '../controllers/courseController';
 
 export const courseRoutes = Router();
