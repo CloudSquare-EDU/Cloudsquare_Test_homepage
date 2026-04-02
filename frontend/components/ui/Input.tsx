@@ -1,6 +1,4 @@
 // components/ui/Input.tsx
-// 역할: 공통 입력 컴포넌트 — label, error 메시지 포함
-
 'use client';
 
 import { InputHTMLAttributes } from 'react';
@@ -14,9 +12,9 @@ export const Input = ({ label, error, id, className = '', ...props }: InputProps
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+        <label htmlFor={inputId} className="text-xs font-medium text-[#9090aa] tracking-wide">
           {label}
         </label>
       )}
@@ -24,14 +22,19 @@ export const Input = ({ label, error, id, className = '', ...props }: InputProps
         id={inputId}
         {...props}
         className={`
-          w-full rounded-lg border px-3 py-2 text-sm
-          focus:outline-none focus:ring-2 focus:ring-blue-500
-          disabled:bg-gray-50 disabled:text-gray-500
-          ${error ? 'border-red-400 focus:ring-red-400' : 'border-gray-300'}
+          h-8 w-full rounded-md border bg-[#18181f] px-3 text-sm text-[#ededf0]
+          placeholder:text-[#44445a]
+          transition-colors
+          focus:outline-none focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]
+          disabled:bg-[#111118] disabled:text-[#55556a] disabled:cursor-not-allowed
+          ${error
+            ? 'border-[#f87171] focus:border-[#f87171] focus:ring-[#f87171]'
+            : 'border-[rgba(255,255,255,0.09)] hover:border-[rgba(255,255,255,0.16)]'
+          }
           ${className}
         `}
       />
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-[#f87171]">{error}</p>}
     </div>
   );
 };

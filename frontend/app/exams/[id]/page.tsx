@@ -1,11 +1,7 @@
 // app/exams/[id]/page.tsx
-// 역할: 시험 응시 페이지
-// UX 요구사항: 타이머 고정 표시, beforeunload 이탈 방지, 제출 전 확인 모달
-// 변경 이력:
-//   - isPublished 조건 제거, 중복 응시 차단 UI 추가
-//   - 선다형 지원: answerCount > 1이면 체크박스, 1이면 라디오 방식 표시
-//   - answers 상태: Record<string, string[]> (선택지 ID 배열)
-
+// 시험 응시 페이지 — 전체화면 집중 모드
+// 상태: intro → in-progress → (redirect to result)
+// localStorage로 답안 자동 저장/복원
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -20,31 +16,45 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
 
+type ExamPhase = 'loading' | 'already-done' | 'intro' | 'in-progress' | 'error';
+
+const formatDuration = (seconds: number) => {
+  if (seconds === 0) return '제한 없음';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}분`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+};
+
 export default function ExamPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
+  const DRAFT_KEY = `exam_draft_${id}`;
+
   const [exam, setExam] = useState<ExamDetail | null>(null);
-  // answers: questionId → 선택된 choiceId 배열 (단답형도 배열로 통일)
+  const [phase, setPhase] = useState<ExamPhase>('loading');
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [existingSubmission, setExistingSubmission] = useState<SubmissionSummary | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [existingSubmission, setExistingSubmission] = useState<SubmissionSummary | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 타이머 만료 시 자동 제출
+  // 타이머는 in-progress 상태일 때만 동작
+  const isTimerActive = phase === 'in-progress';
+
   const handleTimerExpire = useCallback(() => {
-    handleSubmit();
+    if (phase === 'in-progress') handleSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [phase]);
 
   const { formattedTime, isWarning } = useTimer({
     initialSeconds: exam?.duration ?? 0,
     onExpire: handleTimerExpire,
+    paused: !isTimerActive,
   });
 
-  // 시험 데이터 로드 + 중복 응시 여부 확인
+  // 데이터 로드
   useEffect(() => {
     const load = async () => {
       try {
@@ -53,38 +63,51 @@ export default function ExamPage() {
           submissionsApi.checkExamSubmission(id),
         ]);
         setExam(examData);
-        if (prevSub) setExistingSubmission(prevSub);
+        if (prevSub) {
+          setExistingSubmission(prevSub);
+          setPhase('already-done');
+        } else {
+          // localStorage에서 임시 저장된 답안 복원
+          const saved = localStorage.getItem(DRAFT_KEY);
+          if (saved) {
+            try { setAnswers(JSON.parse(saved)); } catch { /* ignore */ }
+          }
+          setPhase('intro');
+        }
       } catch {
-        setError('시험을 불러오는 데 실패했습니다. 로그인 후 다시 시도해주세요.');
-      } finally {
-        setIsLoading(false);
+        setPhase('error');
       }
     };
     load();
   }, [id]);
 
-  // 페이지 이탈 방지 (beforeunload)
+  // 답안 자동 저장 (in-progress 중에만)
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (phase === 'in-progress') {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(answers));
+    }
+  }, [answers, phase]);
+
+  // 시험 시작 시 페이지 이탈 방지
+  useEffect(() => {
+    if (phase !== 'in-progress') return;
+    const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = '시험이 진행 중입니다. 정말 나가시겠습니까?';
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [phase]);
 
-  // 단답형 선택 (radio 방식 — 하나만 선택)
   const handleSingleSelect = (questionId: string, choiceId: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: [choiceId] }));
   };
 
-  // 선다형 토글 (checkbox 방식 — 복수 선택)
   const handleMultiToggle = (questionId: string, choiceId: string) => {
     setAnswers((prev) => {
       const current = prev[questionId] ?? [];
-      const exists = current.includes(choiceId);
-      const updated = exists
-        ? current.filter((id) => id !== choiceId)
+      const updated = current.includes(choiceId)
+        ? current.filter((cid) => cid !== choiceId)
         : [...current, choiceId];
       return { ...prev, [questionId]: updated };
     });
@@ -94,99 +117,165 @@ export default function ExamPage() {
     if (!exam) return;
     setIsSubmitting(true);
     setShowConfirmModal(false);
-
     const answerList = exam.questions.map((q) => ({
       questionId: q.id,
       choiceIds: answers[q.id] ?? [],
     }));
-
     try {
-      const result = await submissionsApi.submit({
-        examId: exam.id,
-        answers: answerList,
-      });
+      const result = await submissionsApi.submit({ examId: exam.id, answers: answerList });
+      localStorage.removeItem(DRAFT_KEY);
       router.push(`/submissions/${result.submissionId}`);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('제출 중 오류가 발생했습니다.');
-      }
+      setErrorMsg(err instanceof ApiError ? err.message : '제출 중 오류가 발생했습니다.');
       setIsSubmitting(false);
     }
   };
 
-  // 답한 문제 수: choiceIds 배열이 비어있지 않은 문제만 카운트
   const answeredCount = exam
     ? exam.questions.filter((q) => (answers[q.id]?.length ?? 0) > 0).length
     : 0;
   const totalCount = exam?.questions.length ?? 0;
 
-  if (isLoading) {
+  // ── Loading ──
+  if (phase === 'loading') {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-gray-500">시험 로딩 중...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11]">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
       </div>
     );
   }
 
-  if (error || !exam) {
+  // ── Error ──
+  if (phase === 'error' || !exam) {
     return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-700">
-        {error ?? '시험을 찾을 수 없습니다.'}
+      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
+        <div className="rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] p-4 text-sm text-[#f87171]">
+          시험을 불러오는 데 실패했습니다.{' '}
+          <Link href="/" className="underline">돌아가기</Link>
+        </div>
       </div>
     );
   }
 
-  // 이미 응시한 경우 — 재응시 불가 안내 화면
-  if (existingSubmission) {
+  // ── Already done ──
+  if (phase === 'already-done' && existingSubmission) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-8 max-w-md w-full">
-          <p className="text-4xl mb-4">📋</p>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">이미 응시한 시험입니다</h2>
-          <p className="text-gray-600 mb-1">
-            <strong>{exam.title}</strong>
+      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
+        <div className="w-full max-w-sm rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f] p-6 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#0f2318] text-2xl">
+            ✓
+          </div>
+          <h2 className="text-base font-semibold text-[#ededf0]">이미 응시한 시험입니다</h2>
+          <p className="mt-1 text-sm text-[#55556a]">{exam.title}</p>
+          <p className="mt-1 text-xs text-[#44445a]">
+            {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')} 응시
           </p>
-          <p className="text-gray-500 text-sm mb-2">
-            응시일: {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')}
-          </p>
-          <p className="text-2xl font-bold text-blue-600 mb-6">
-            점수: {existingSubmission.score}점
-          </p>
-          <div className="flex flex-col gap-2">
+          <p className="mt-4 text-3xl font-black text-green-400">{existingSubmission.score}<span className="text-base font-normal text-[#55556a]">점</span></p>
+          <div className="mt-5 flex flex-col gap-2">
             <Link href={`/submissions/${existingSubmission.id}`}>
               <Button className="w-full">결과 상세 보기</Button>
             </Link>
             <Link href="/">
-              <Button variant="secondary" className="w-full">시험 목록으로</Button>
+              <Button variant="ghost" className="w-full">시험 목록으로</Button>
             </Link>
           </div>
-          <p className="mt-4 text-xs text-gray-400">
-            재응시가 필요하면 관리자에게 문의하세요.
-          </p>
+          <p className="mt-3 text-xs text-[#44445a]">재응시는 관리자에게 문의하세요</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="pb-24">
-      {/* 상단 고정 헤더 — 타이머 항상 표시 */}
-      <div className="sticky top-0 z-40 border-b border-gray-200 bg-white py-3 shadow-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4">
-          <div>
-            <h1 className="font-semibold text-gray-900">{exam.title}</h1>
-            <p className="text-sm text-gray-500">
-              {answeredCount} / {totalCount} 문제 응답
-            </p>
+  // ── Intro ──
+  if (phase === 'intro') {
+    const hasDraft = Object.keys(answers).length > 0;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
+        <div className="w-full max-w-md">
+          {/* 헤더 */}
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1e1e28] text-2xl">
+              📝
+            </div>
+            <h1 className="text-xl font-semibold text-[#ededf0]">{exam.title}</h1>
+            {exam.description && (
+              <p className="mt-2 text-sm text-[#9090aa]">{exam.description}</p>
+            )}
           </div>
-          {exam.duration > 0 && <Timer formattedTime={formattedTime} isWarning={isWarning} />}
+
+          {/* 시험 정보 */}
+          <div className="mb-5 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f]">
+            <div className="grid grid-cols-2 divide-x divide-[rgba(255,255,255,0.06)]">
+              <div className="px-5 py-4 text-center">
+                <p className="text-2xl font-bold text-[#ededf0]">{totalCount}</p>
+                <p className="mt-0.5 text-xs text-[#55556a]">문제 수</p>
+              </div>
+              <div className="px-5 py-4 text-center">
+                <p className="text-2xl font-bold text-[#ededf0]">{formatDuration(exam.duration)}</p>
+                <p className="mt-0.5 text-xs text-[#55556a]">제한 시간</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 임시저장 안내 */}
+          {hasDraft && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-[rgba(94,106,210,0.3)] bg-[#1e2245] px-3 py-2.5 text-xs text-[#8090d8]">
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 2a6 6 0 100 12A6 6 0 008 2zm0 1a5 5 0 110 10A5 5 0 018 3zm-.5 2.5v4l3 1.5.5-.87-2.5-1.26V5.5h-1z" />
+              </svg>
+              이전에 작성 중이던 답안이 있습니다. 이어서 시작합니다.
+            </div>
+          )}
+
+          {/* 주의사항 */}
+          <div className="mb-5 text-xs text-[#44445a] space-y-1">
+            <p>• 시험 중 페이지를 나가면 답안이 임시 저장됩니다</p>
+            <p>• 제출 후에는 수정이 불가합니다</p>
+            {exam.duration > 0 && <p>• 시간 초과 시 자동 제출됩니다</p>}
+          </div>
+
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => setPhase('in-progress')}
+          >
+            시험 시작
+          </Button>
+          <Link href="/">
+            <Button variant="ghost" className="mt-2 w-full" size="sm">취소</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── In Progress ──
+  return (
+    <div className="min-h-screen bg-[#0f0f11] pb-24">
+      {/* 상단 고정 헤더 */}
+      <div className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.07)] bg-[#111117]/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
+          <div>
+            <h1 className="text-sm font-semibold text-[#ededf0]">{exam.title}</h1>
+            <p className="text-xs text-[#55556a]">{answeredCount} / {totalCount} 응답</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {exam.duration > 0 && <Timer formattedTime={formattedTime} isWarning={isWarning} />}
+            {/* 진행률 바 */}
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="h-1.5 w-24 rounded-full bg-[#1e1e28]">
+                <div
+                  className="h-full rounded-full bg-[#5e6ad2] transition-all"
+                  style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
+                />
+              </div>
+              <span className="text-xs text-[#55556a]">{totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* 문제 목록 */}
-      <div className="mt-6 flex flex-col gap-6">
+      <div className="mx-auto max-w-3xl px-5 pt-6 flex flex-col gap-4">
         {exam.questions.map((question, idx) => {
           const isMulti = question.answerCount > 1;
           const selectedIds = answers[question.id] ?? [];
@@ -194,40 +283,35 @@ export default function ExamPage() {
           return (
             <div
               key={question.id}
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+              className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f] p-5"
             >
-              {/* 문제 텍스트 + 선다형 배지 */}
-              <div className="mb-1 flex items-start gap-2">
-                <p className="flex-1 font-medium text-gray-900">
-                  <span className="mr-2 text-blue-600">Q{idx + 1}.</span>
-                  {question.content}
-                </p>
+              <div className="mb-3 flex items-start gap-2.5">
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold bg-[#1e1e2e] text-[#5e6ad2]">
+                  Q{idx + 1}
+                </span>
                 {isMulti && (
-                  <span className="mt-0.5 shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                    복수 정답 ({question.answerCount}개)
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[#1e1e2e] text-[#8090d8]">
+                    복수 정답 {question.answerCount}개
                   </span>
                 )}
-              </div>
-              {isMulti && (
-                <p className="mb-3 text-xs text-gray-400 pl-6">
-                  정답을 모두 선택하세요. (총 {question.answerCount}개)
+                <p className="text-sm font-medium text-[#ededf0] leading-relaxed">
+                  {question.content}
                 </p>
-              )}
+              </div>
 
-              <div className="flex flex-col gap-2 mt-3">
+              <div className="flex flex-col gap-1.5 mt-4">
                 {question.choices.map((choice) => {
                   const isSelected = selectedIds.includes(choice.id);
 
                   if (isMulti) {
-                    // ── 선다형: 체크박스 ──
                     return (
                       <label
                         key={choice.id}
                         className={`
-                          flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition
+                          flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors
                           ${isSelected
-                            ? 'border-purple-500 bg-purple-50 text-purple-800'
-                            : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                            ? 'border-[#5e6ad2] bg-[#1e2245] text-[#ededf0]'
+                            : 'border-[rgba(255,255,255,0.07)] bg-[#111117] text-[#9090aa] hover:border-[rgba(255,255,255,0.14)] hover:text-[#ededf0]'
                           }
                         `}
                       >
@@ -235,40 +319,32 @@ export default function ExamPage() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleMultiToggle(question.id, choice.id)}
-                          className="h-4 w-4 rounded text-purple-600"
+                          className="h-4 w-4 rounded accent-[#5e6ad2]"
                         />
-                        <span
-                          className={`
-                            flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold
-                            ${isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-gray-400'}
-                          `}
-                        >
-                          {choice.order}
+                        <span className={`shrink-0 text-xs font-mono ${isSelected ? 'text-[#5e6ad2]' : 'text-[#44445a]'}`}>
+                          {choice.order}.
                         </span>
                         {choice.content}
                       </label>
                     );
                   }
 
-                  // ── 단답형: 라디오 방식 버튼 ──
                   return (
                     <button
                       key={choice.id}
                       onClick={() => handleSingleSelect(question.id, choice.id)}
                       className={`
-                        flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition
+                        flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm transition-colors
                         ${isSelected
-                          ? 'border-blue-500 bg-blue-50 text-blue-800'
-                          : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                          ? 'border-[#5e6ad2] bg-[#1e2245] text-[#ededf0]'
+                          : 'border-[rgba(255,255,255,0.07)] bg-[#111117] text-[#9090aa] hover:border-[rgba(255,255,255,0.14)] hover:text-[#ededf0]'
                         }
                       `}
                     >
-                      <span
-                        className={`
-                          flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold
-                          ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400'}
-                        `}
-                      >
+                      <span className={`
+                        flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-mono
+                        ${isSelected ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[#2e2e42] text-[#44445a]'}
+                      `}>
                         {choice.order}
                       </span>
                       {choice.content}
@@ -281,10 +357,18 @@ export default function ExamPage() {
         })}
       </div>
 
-      {/* 하단 고정 제출 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-4 py-4 shadow-lg">
-        <div className="mx-auto flex max-w-5xl justify-end">
-          {error && <p className="mr-4 self-center text-sm text-red-600">{error}</p>}
+      {/* 하단 고정 제출 바 */}
+      <div className="fixed bottom-0 left-0 right-0 border-t border-[rgba(255,255,255,0.07)] bg-[#111117]/90 backdrop-blur-sm px-5 py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between">
+          {errorMsg ? (
+            <p className="text-xs text-[#f87171]">{errorMsg}</p>
+          ) : (
+            <p className="text-xs text-[#55556a]">
+              {answeredCount < totalCount
+                ? `${totalCount - answeredCount}개 문제가 미응답입니다`
+                : '모든 문제에 답했습니다'}
+            </p>
+          )}
           <Button
             onClick={() => setShowConfirmModal(true)}
             isLoading={isSubmitting}
@@ -295,14 +379,13 @@ export default function ExamPage() {
         </div>
       </div>
 
-      {/* 제출 확인 모달 */}
       <Modal
         isOpen={showConfirmModal}
         title="시험을 제출하시겠습니까?"
         message={
           answeredCount < totalCount
-            ? `아직 ${totalCount - answeredCount}개 문제에 답하지 않았습니다. 그래도 제출하시겠습니까?`
-            : '모든 문제에 답했습니다. 제출 후에는 수정할 수 없습니다.'
+            ? `${totalCount - answeredCount}개 문제가 미응답입니다. 그래도 제출하시겠습니까?`
+            : '모든 문제에 답했습니다. 제출 후에는 수정이 불가합니다.'
         }
         confirmLabel="제출"
         onConfirm={handleSubmit}

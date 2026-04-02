@@ -66,8 +66,8 @@ export const updateQuestion = async (id: string, input: UpdateQuestionInput) => 
 
   if (choices) {
     const correctCount = choices.filter((c) => c.isCorrect).length;
-    if (correctCount !== 1) {
-      throw new AppError(400, ErrorCode.BAD_REQUEST, '선택지에 정답이 정확히 하나 있어야 합니다.');
+    if (correctCount < 1) {
+      throw new AppError(400, ErrorCode.BAD_REQUEST, '정답을 최소 1개 이상 선택해야 합니다.');
     }
 
     // 기존 선택지 삭제 후 새 선택지 생성

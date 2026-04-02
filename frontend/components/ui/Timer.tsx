@@ -1,6 +1,4 @@
 // components/ui/Timer.tsx
-// 역할: 시험 타이머 UI — 항상 화면 상단에 고정 표시, 5분 이하 시 빨간색 경고
-
 'use client';
 
 interface TimerProps {
@@ -12,29 +10,20 @@ export const Timer = ({ formattedTime, isWarning }: TimerProps) => {
   return (
     <div
       className={`
-        flex items-center gap-2 rounded-lg px-4 py-2 font-mono text-lg font-bold
+        inline-flex items-center gap-2 rounded-md px-3 py-1.5 font-mono text-sm font-semibold tabular-nums
+        transition-colors
         ${isWarning
-          ? 'animate-pulse bg-red-100 text-red-600'
-          : 'bg-blue-100 text-blue-700'
+          ? 'animate-pulse border border-red-800/60 bg-red-950/60 text-red-400'
+          : 'border border-[rgba(255,255,255,0.09)] bg-[#1e1e28] text-[#ededf0]'
         }
       `}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-5 w-5"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
+      <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      <span>{formattedTime}</span>
-      {isWarning && <span className="text-sm font-normal">남은 시간 부족!</span>}
+      {formattedTime}
+      {isWarning && <span className="text-xs font-normal text-red-500">주의</span>}
     </div>
   );
 };

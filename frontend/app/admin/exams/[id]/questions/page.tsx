@@ -1,10 +1,4 @@
 // app/admin/exams/[id]/questions/page.tsx
-// 역할: 관리자 문제 관리 페이지
-// 변경 이력:
-//   - 문제 추가: 한 번에 여러 문제를 작성 후 일괄 등록 (bulkCreate 활용)
-//   - 정답 선택: 라디오 → 체크박스로 변경 (선다형 지원)
-//   - 엑셀: 정답번호 컬럼이 "1" 또는 "1,3" 형식 모두 지원
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -19,8 +13,6 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
 
-// ─── 폼 타입 정의 ────────────────────────────────────────────
-
 interface ChoiceForm {
   content: string;
   isCorrect: boolean;
@@ -30,6 +22,16 @@ interface ChoiceForm {
 interface QuestionForm {
   content: string;
   choices: ChoiceForm[];
+}
+
+interface ExcelRow {
+  문제번호: number;
+  문제내용: string;
+  선택지1: string;
+  선택지2: string;
+  선택지3: string;
+  선택지4: string;
+  '정답번호(1~4)': string | number;
 }
 
 const makeDefaultQuestion = (): QuestionForm => ({
@@ -42,44 +44,27 @@ const makeDefaultQuestion = (): QuestionForm => ({
   ],
 });
 
-// ─── 엑셀 행 타입 ────────────────────────────────────────────
-
-interface ExcelRow {
-  문제번호: number;
-  문제내용: string;
-  선택지1: string;
-  선택지2: string;
-  선택지3: string;
-  선택지4: string;
-  '정답번호(1~4)': string | number; // "1" 또는 "1,3" 형식 지원
-}
-
-// ─── 컴포넌트 ────────────────────────────────────────────────
+type PanelMode = 'none' | 'add' | 'excel';
 
 export default function AdminQuestionsPage() {
   const { id: examId } = useParams<{ id: string }>();
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // 문제 일괄 추가 폼
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [panelMode, setPanelMode] = useState<PanelMode>('none');
   const [questionForms, setQuestionForms] = useState<QuestionForm[]>([makeDefaultQuestion()]);
   const [isAdding, setIsAdding] = useState(false);
 
-  // 삭제
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 엑셀 일괄 업로드
-  const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelPreview, setExcelPreview] = useState<ExcelRow[]>([]);
   const [excelError, setExcelError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [error, setError] = useState<string | null>(null);
 
   const loadExam = () => {
     examsApi
@@ -89,76 +74,49 @@ export default function AdminQuestionsPage() {
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => {
-    loadExam();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId]);
+  useEffect(() => { loadExam(); }, [examId]);
 
-  // ───── 문제 폼 조작 ─────────────────────────────────────────
-
-  const addQuestionCard = () => {
-    setQuestionForms((prev) => [...prev, makeDefaultQuestion()]);
+  const openPanel = (mode: PanelMode) => {
+    setPanelMode((prev) => prev === mode ? 'none' : mode);
+    setQuestionForms([makeDefaultQuestion()]);
+    setExcelPreview([]);
+    setExcelError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const removeQuestionCard = (qIdx: number) => {
-    setQuestionForms((prev) => prev.filter((_, i) => i !== qIdx));
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  const updateQuestionContent = (qIdx: number, value: string) => {
-    setQuestionForms((prev) =>
-      prev.map((q, i) => (i === qIdx ? { ...q, content: value } : q)),
+  // ── 문제 폼 조작 ──────────────────────────────────────────
+
+  const addQuestionCard = () => setQuestionForms((p) => [...p, makeDefaultQuestion()]);
+  const removeQuestionCard = (qi: number) => setQuestionForms((p) => p.filter((_, i) => i !== qi));
+  const updateContent = (qi: number, v: string) =>
+    setQuestionForms((p) => p.map((q, i) => i === qi ? { ...q, content: v } : q));
+  const updateChoice = (qi: number, ci: number, v: string) =>
+    setQuestionForms((p) =>
+      p.map((q, i) =>
+        i === qi ? { ...q, choices: q.choices.map((c, j) => j === ci ? { ...c, content: v } : c) } : q
+      )
     );
-  };
-
-  const updateChoiceContent = (qIdx: number, cIdx: number, value: string) => {
-    setQuestionForms((prev) =>
-      prev.map((q, i) =>
-        i === qIdx
-          ? {
-              ...q,
-              choices: q.choices.map((c, ci) => (ci === cIdx ? { ...c, content: value } : c)),
-            }
-          : q,
-      ),
+  const toggleCorrect = (qi: number, ci: number) =>
+    setQuestionForms((p) =>
+      p.map((q, i) =>
+        i === qi ? { ...q, choices: q.choices.map((c, j) => j === ci ? { ...c, isCorrect: !c.isCorrect } : c) } : q
+      )
     );
-  };
 
-  // 정답 체크박스 토글 — 복수 정답 지원
-  const toggleCorrect = (qIdx: number, cIdx: number) => {
-    setQuestionForms((prev) =>
-      prev.map((q, i) =>
-        i === qIdx
-          ? {
-              ...q,
-              choices: q.choices.map((c, ci) =>
-                ci === cIdx ? { ...c, isCorrect: !c.isCorrect } : c,
-              ),
-            }
-          : q,
-      ),
-    );
-  };
-
-  // ───── 일괄 문제 등록 ────────────────────────────────────────
+  // ── 일괄 등록 ────────────────────────────────────────────
 
   const handleBulkAdd = async () => {
     setError(null);
-
-    // 유효성 검사
     for (let i = 0; i < questionForms.length; i++) {
       const q = questionForms[i];
-      if (!q.content.trim()) {
-        setError(`Q${i + 1}: 문제 내용을 입력해주세요.`);
-        return;
-      }
-      if (q.choices.some((c) => !c.content.trim())) {
-        setError(`Q${i + 1}: 모든 선택지를 입력해주세요.`);
-        return;
-      }
-      if (!q.choices.some((c) => c.isCorrect)) {
-        setError(`Q${i + 1}: 정답을 최소 1개 이상 선택해주세요.`);
-        return;
-      }
+      if (!q.content.trim()) { setError(`Q${i + 1}: 문제 내용을 입력해주세요.`); return; }
+      if (q.choices.some((c) => !c.content.trim())) { setError(`Q${i + 1}: 모든 선택지를 입력해주세요.`); return; }
+      if (!q.choices.some((c) => c.isCorrect)) { setError(`Q${i + 1}: 정답을 최소 1개 이상 선택해주세요.`); return; }
     }
 
     setIsAdding(true);
@@ -169,73 +127,49 @@ export default function AdminQuestionsPage() {
         order: currentCount + idx + 1,
         choices: q.choices,
       }));
-
       const result = await questionsApi.bulkCreate(examId, questions);
       setQuestionForms([makeDefaultQuestion()]);
-      setShowAddForm(false);
+      setPanelMode('none');
       loadExam();
-      // 결과 메시지는 페이지 상단에 잠깐 표시
-      setUploadResult(`✅ ${result.count}개 문제가 등록되었습니다.`);
-      setTimeout(() => setUploadResult(null), 4000);
+      showSuccess(`${result.count}개 문제가 등록되었습니다.`);
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
-      else setError('문제 등록 중 오류가 발생했습니다.');
+      setError(err instanceof ApiError ? err.message : '문제 등록 중 오류가 발생했습니다.');
     } finally {
       setIsAdding(false);
     }
   };
 
-  // ───── 엑셀 파싱 ─────────────────────────────────────────────
+  // ── 엑셀 파싱 ────────────────────────────────────────────
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setExcelError(null);
     setExcelPreview([]);
-    setUploadResult(null);
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const data = ev.target?.result;
         const wb = XLSX.read(data, { type: 'array' });
         const ws = wb.Sheets['문제목록'];
-        if (!ws) {
-          setExcelError("'문제목록' 시트를 찾을 수 없습니다. 샘플 형식을 확인해주세요.");
-          return;
-        }
-
+        if (!ws) { setExcelError("'문제목록' 시트를 찾을 수 없습니다."); return; }
         const rows = XLSX.utils.sheet_to_json<ExcelRow>(ws);
-        if (rows.length === 0) {
-          setExcelError('데이터가 없습니다. 최소 1개 이상의 문제를 입력해주세요.');
-          return;
-        }
-
-        // 유효성 검사
+        if (rows.length === 0) { setExcelError('데이터가 없습니다.'); return; }
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i];
-          if (!r['문제내용']?.toString().trim()) {
-            setExcelError(`${i + 2}행: 문제내용이 비어있습니다.`);
-            return;
-          }
+          if (!r['문제내용']?.toString().trim()) { setExcelError(`${i + 2}행: 문제내용이 비어있습니다.`); return; }
           if (!r['선택지1'] || !r['선택지2'] || !r['선택지3'] || !r['선택지4']) {
-            setExcelError(`${i + 2}행: 선택지1~4를 모두 입력해주세요.`);
-            return;
+            setExcelError(`${i + 2}행: 선택지1~4를 모두 입력해주세요.`); return;
           }
-          // 정답번호: "1" 또는 "1,3" 형식
           const ansStr = r['정답번호(1~4)']?.toString().trim() ?? '';
           const ansNums = ansStr.split(',').map((s) => Number(s.trim()));
           if (ansNums.some((n) => isNaN(n) || n < 1 || n > 4)) {
-            setExcelError(
-              `${i + 2}행: 정답번호는 1~4 숫자를 쉼표로 구분해 입력하세요. (예: 2 또는 1,3)`,
-            );
-            return;
+            setExcelError(`${i + 2}행: 정답번호는 1~4 숫자를 쉼표로 구분하세요. (예: 2 또는 1,3)`); return;
           }
         }
-
         setExcelPreview(rows);
       } catch {
-        setExcelError('파일을 읽는 중 오류가 발생했습니다. 올바른 .xlsx 파일인지 확인해주세요.');
+        setExcelError('파일을 읽는 중 오류가 발생했습니다.');
       }
     };
     reader.readAsArrayBuffer(file);
@@ -245,8 +179,6 @@ export default function AdminQuestionsPage() {
     if (excelPreview.length === 0) return;
     setIsUploading(true);
     setError(null);
-    setUploadResult(null);
-
     try {
       const currentCount = exam?.questions?.length ?? 0;
       const questions = excelPreview.map((r, idx) => {
@@ -263,12 +195,12 @@ export default function AdminQuestionsPage() {
           ],
         };
       });
-
       const result = await questionsApi.bulkCreate(examId, questions);
-      setUploadResult(`✅ ${result.count}개 문제가 성공적으로 등록되었습니다.`);
       setExcelPreview([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      setPanelMode('none');
       loadExam();
+      showSuccess(`${result.count}개 문제가 등록되었습니다.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '업로드 중 오류가 발생했습니다.');
     } finally {
@@ -293,7 +225,7 @@ export default function AdminQuestionsPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-gray-500">로딩 중...</p>
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
       </div>
     );
   }
@@ -301,176 +233,158 @@ export default function AdminQuestionsPage() {
   return (
     <div>
       {/* 브레드크럼 */}
-      <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/admin/exams" className="hover:underline">시험 관리</Link>
+      <div className="mb-3 flex items-center gap-1.5 text-xs text-[#44445a]">
+        <Link href="/admin/exams" className="hover:text-[#9090aa] transition-colors">시험 관리</Link>
         <span>›</span>
-        <span>{exam?.title}</span>
+        <span className="text-[#9090aa]">{exam?.title}</span>
       </div>
 
       {/* 헤더 */}
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">문제 관리</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-[#ededf0]">문제 관리</h1>
+          <p className="mt-0.5 text-sm text-[#55556a]">총 {exam?.questions?.length ?? 0}개 문제</p>
+        </div>
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => {
-              setShowExcelUpload((v) => !v);
-              setShowAddForm(false);
-              setUploadResult(null);
-              setExcelPreview([]);
-              setExcelError(null);
-            }}
+            size="sm"
+            onClick={() => openPanel('excel')}
           >
-            {showExcelUpload ? '취소' : '📥 엑셀 일괄 업로드'}
+            {panelMode === 'excel' ? '취소' : '엑셀 업로드'}
           </Button>
           <Button
-            onClick={() => {
-              setShowAddForm((v) => !v);
-              setShowExcelUpload(false);
-              setQuestionForms([makeDefaultQuestion()]);
-            }}
+            size="sm"
+            onClick={() => openPanel('add')}
           >
-            {showAddForm ? '취소' : '+ 문제 추가'}
+            {panelMode === 'add' ? '취소' : '+ 문제 추가'}
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+          {error}
+        </div>
       )}
-      {uploadResult && (
-        <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800 font-medium">
-          {uploadResult}
+      {successMsg && (
+        <div className="mb-4 rounded-md border border-[rgba(74,222,128,0.15)] bg-[#0f2318] px-3 py-2.5 text-xs font-medium text-green-400">
+          {successMsg}
         </div>
       )}
 
-      {/* ── 엑셀 일괄 업로드 섹션 ── */}
-      {showExcelUpload && (
-        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-5">
-          <h2 className="mb-1 font-semibold text-green-800">엑셀 일괄 업로드</h2>
-          <p className="mb-3 text-sm text-green-700">
-            아래 컬럼 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 문제가 자동 등록됩니다.
+      {/* ── 엑셀 업로드 패널 ── */}
+      {panelMode === 'excel' && (
+        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
+          <h2 className="mb-1 text-sm font-semibold text-[#ededf0]">엑셀 일괄 업로드</h2>
+          <p className="mb-4 text-xs text-[#55556a]">
+            아래 컬럼 형식의 .xlsx 파일을 업로드하면 문제가 자동 등록됩니다.
+            <span className="ml-2 text-[#5e6ad2]">복수 정답은 쉼표로 구분 (예: 1,3)</span>
           </p>
 
           {/* 컬럼 형식 안내 */}
-          <div className="mb-4 rounded-lg border border-green-300 bg-white px-4 py-3 text-sm">
-            <p className="font-medium text-gray-700 mb-2">
-              엑셀 컬럼 형식
-              <span className="ml-2 text-xs font-normal text-blue-600">
-                ※ 복수 정답은 쉼표로 구분 (예: 1,3)
-              </span>
-            </p>
+          <div className="mb-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a] p-3">
+            <p className="mb-2 text-xs font-medium text-[#9090aa]">엑셀 컬럼 형식</p>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-gray-600">
+              <table className="w-full text-xs text-[#55556a]">
                 <thead>
-                  <tr className="bg-gray-100">
+                  <tr className="border-b border-[rgba(255,255,255,0.06)]">
                     {['문제번호', '문제내용', '선택지1', '선택지2', '선택지3', '선택지4', '정답번호(1~4)'].map((h) => (
-                      <th key={h} className="border border-gray-200 px-2 py-1 text-left">{h}</th>
+                      <th key={h} className="pb-1.5 pr-3 text-left font-medium text-[#9090aa] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="text-[#44445a]">
                   <tr>
-                    <td className="border border-gray-200 px-2 py-1 text-center">1</td>
-                    <td className="border border-gray-200 px-2 py-1">파이썬 리스트 정의 방법은?</td>
-                    <td className="border border-gray-200 px-2 py-1">a = (1,2)</td>
-                    <td className="border border-gray-200 px-2 py-1">a = [1,2]</td>
-                    <td className="border border-gray-200 px-2 py-1">a = {'{1,2}'}</td>
-                    <td className="border border-gray-200 px-2 py-1">a = &lt;1,2&gt;</td>
-                    <td className="border border-gray-200 px-2 py-1 text-center font-bold text-blue-600">2</td>
+                    <td className="pt-1.5 pr-3">1</td>
+                    <td className="pt-1.5 pr-3">파이썬 리스트 정의 방법은?</td>
+                    <td className="pt-1.5 pr-3">a = (1,2)</td>
+                    <td className="pt-1.5 pr-3">a = [1,2]</td>
+                    <td className="pt-1.5 pr-3">{'a = {1,2}'}</td>
+                    <td className="pt-1.5 pr-3">a = &lt;1,2&gt;</td>
+                    <td className="pt-1.5 pr-3 font-bold text-[#5e6ad2]">2</td>
                   </tr>
-                  <tr className="bg-gray-50">
-                    <td className="border border-gray-200 px-2 py-1 text-center">2</td>
-                    <td className="border border-gray-200 px-2 py-1">다음 중 정렬 알고리즘을 모두 고르시오</td>
-                    <td className="border border-gray-200 px-2 py-1">버블 정렬</td>
-                    <td className="border border-gray-200 px-2 py-1">DFS</td>
-                    <td className="border border-gray-200 px-2 py-1">퀵 정렬</td>
-                    <td className="border border-gray-200 px-2 py-1">BFS</td>
-                    <td className="border border-gray-200 px-2 py-1 text-center font-bold text-blue-600">1,3</td>
+                  <tr>
+                    <td className="pt-1 pr-3">2</td>
+                    <td className="pt-1 pr-3">정렬 알고리즘을 모두 고르시오</td>
+                    <td className="pt-1 pr-3">버블 정렬</td>
+                    <td className="pt-1 pr-3">DFS</td>
+                    <td className="pt-1 pr-3">퀵 정렬</td>
+                    <td className="pt-1 pr-3">BFS</td>
+                    <td className="pt-1 pr-3 font-bold text-[#5e6ad2]">1,3</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mb-3">
+          <div className="mb-3">
             <input
               ref={fileInputRef}
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileChange}
-              className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-600 file:px-3 file:py-2 file:text-white file:text-sm file:cursor-pointer hover:file:bg-green-700"
+              className="block text-xs text-[#55556a] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
             />
           </div>
 
           {excelError && (
-            <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{excelError}</div>
-          )}
-          {uploadResult && showExcelUpload && (
-            <div className="mb-3 rounded-lg bg-green-100 p-3 text-sm text-green-800 font-medium">
-              {uploadResult}
+            <div className="mb-3 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2 text-xs text-[#f87171]">
+              {excelError}
             </div>
           )}
 
-          {/* 미리보기 */}
           {excelPreview.length > 0 && (
-            <div className="mb-4">
-              <p className="mb-2 text-sm font-medium text-gray-700">
-                미리보기 ({excelPreview.length}개 문제)
-              </p>
-              <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+            <div>
+              <p className="mb-2 text-xs font-medium text-[#9090aa]">미리보기 ({excelPreview.length}개 문제)</p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a]">
                 {excelPreview.map((row, idx) => {
                   const ansStr = row['정답번호(1~4)']?.toString() ?? '';
                   return (
-                    <div key={idx} className="border-b border-gray-100 px-4 py-2 text-sm last:border-0">
-                      <p className="font-medium text-gray-800">
-                        <span className="mr-2 text-blue-600">Q{idx + 1}.</span>
+                    <div key={idx} className="border-b border-[rgba(255,255,255,0.05)] px-4 py-2.5 last:border-0">
+                      <p className="text-xs font-medium text-[#ededf0]">
+                        <span className="mr-2 text-[#5e6ad2]">Q{idx + 1}.</span>
                         {row['문제내용']}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        ① {row['선택지1']} ② {row['선택지2']} ③ {row['선택지3']} ④ {row['선택지4']}
-                        <span className="ml-2 font-semibold text-green-700">
-                          정답: {ansStr}번
-                        </span>
+                      <p className="mt-1 text-[11px] text-[#44445a]">
+                        ① {row['선택지1']} &nbsp;② {row['선택지2']} &nbsp;③ {row['선택지3']} &nbsp;④ {row['선택지4']}
+                        <span className="ml-2 text-green-500 font-medium">정답: {ansStr}번</span>
                       </p>
                     </div>
                   );
                 })}
               </div>
-              <Button className="mt-3" isLoading={isUploading} onClick={handleExcelUpload}>
-                {excelPreview.length}개 문제 등록
-              </Button>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" isLoading={isUploading} onClick={handleExcelUpload}>
+                  {excelPreview.length}개 문제 등록
+                </Button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── 문제 일괄 추가 폼 ── */}
-      {showAddForm && (
-        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
+      {/* ── 문제 일괄 추가 패널 ── */}
+      {panelMode === 'add' && (
+        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-blue-900">
-              문제 일괄 추가
-              <span className="ml-2 text-sm font-normal text-blue-600">
-                ({questionForms.length}개 작성 중)
-              </span>
+            <h2 className="text-sm font-semibold text-[#ededf0]">
+              문제 추가
+              <span className="ml-2 text-xs font-normal text-[#55556a]">{questionForms.length}개 작성 중</span>
             </h2>
           </div>
 
-          <div className="flex flex-col gap-6">
-            {questionForms.map((qForm, qIdx) => (
-              <div
-                key={qIdx}
-                className="rounded-xl border border-blue-300 bg-white p-4 shadow-sm"
-              >
+          <div className="flex flex-col gap-4">
+            {questionForms.map((qForm, qi) => (
+              <div key={qi} className="rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a] p-4">
                 {/* 문제 헤더 */}
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-blue-700">Q{qIdx + 1}</span>
+                  <span className="text-xs font-semibold text-[#5e6ad2]">Q{qi + 1}</span>
                   {questionForms.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => removeQuestionCard(qIdx)}
-                      className="text-xs text-red-500 hover:text-red-700"
+                      onClick={() => removeQuestionCard(qi)}
+                      className="text-xs text-[#44445a] hover:text-[#f87171] transition-colors"
                     >
                       ✕ 삭제
                     </button>
@@ -482,62 +396,61 @@ export default function AdminQuestionsPage() {
                   <Input
                     label="문제 내용"
                     value={qForm.content}
-                    onChange={(e) => updateQuestionContent(qIdx, e.target.value)}
+                    onChange={(e) => updateContent(qi, e.target.value)}
                     placeholder="문제를 입력하세요"
                   />
                 </div>
 
                 {/* 선택지 */}
-                <p className="mb-2 text-xs font-medium text-gray-600">
-                  선택지 및 정답 선택
-                  <span className="ml-1 text-blue-500">(복수 정답 허용 — 체크박스로 선택)</span>
+                <p className="mb-2 text-xs text-[#55556a]">
+                  선택지 및 정답
+                  <span className="ml-1 text-[#5e6ad2]">(체크박스로 복수 정답 선택 가능)</span>
                 </p>
                 <div className="flex flex-col gap-2">
-                  {qForm.choices.map((choice, cIdx) => (
-                    <div key={cIdx} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={choice.isCorrect}
-                        onChange={() => toggleCorrect(qIdx, cIdx)}
-                        className="h-4 w-4 rounded text-blue-600"
+                  {qForm.choices.map((choice, ci) => (
+                    <div key={ci} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleCorrect(qi, ci)}
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                          choice.isCorrect
+                            ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white'
+                            : 'border-[rgba(255,255,255,0.15)] bg-transparent'
+                        }`}
                         title="정답으로 선택"
-                      />
+                      >
+                        {choice.isCorrect && (
+                          <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </button>
                       <input
                         type="text"
                         value={choice.content}
-                        onChange={(e) => updateChoiceContent(qIdx, cIdx, e.target.value)}
-                        placeholder={`선택지 ${cIdx + 1}`}
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => updateChoice(qi, ci, e.target.value)}
+                        placeholder={`선택지 ${ci + 1}`}
+                        className={`flex-1 rounded-md border bg-[#18181f] px-3 py-1.5 text-sm text-[#ededf0] placeholder-[#44445a] focus:outline-none transition-colors ${
+                          choice.isCorrect
+                            ? 'border-[rgba(94,106,210,0.5)]'
+                            : 'border-[rgba(255,255,255,0.09)] focus:border-[#5e6ad2]'
+                        }`}
                       />
                       {choice.isCorrect && (
-                        <span className="text-xs font-medium text-green-600 whitespace-nowrap">
-                          ✓ 정답
-                        </span>
+                        <span className="shrink-0 text-[10px] font-medium text-[#5e6ad2]">정답</span>
                       )}
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-gray-400">
-                  체크박스에 체크된 선택지가 정답으로 설정됩니다.
-                </p>
               </div>
             ))}
           </div>
 
-          {/* 문제 추가 / 등록 버튼 */}
-          <div className="mt-4 flex items-center gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={addQuestionCard}
-            >
+          <div className="mt-4 flex items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={addQuestionCard}>
               + 문제 더 추가
             </Button>
-            <Button
-              type="button"
-              isLoading={isAdding}
-              onClick={handleBulkAdd}
-            >
+            <Button type="button" size="sm" isLoading={isAdding} onClick={handleBulkAdd}>
               {questionForms.length}개 문제 등록
             </Button>
           </div>
@@ -546,41 +459,46 @@ export default function AdminQuestionsPage() {
 
       {/* ── 문제 목록 ── */}
       {!exam?.questions?.length ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center text-gray-500">
-          등록된 문제가 없습니다.
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
+          <p className="text-sm text-[#55556a]">등록된 문제가 없습니다</p>
+          <p className="mt-1 text-xs text-[#44445a]">위 버튼으로 문제를 추가하세요</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {exam.questions.map((q: Question, idx) => (
             <div
               key={q.id}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] px-5 py-4 hover:border-[rgba(255,255,255,0.12)] transition-colors"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium text-gray-900">
-                      <span className="mr-2 text-blue-600">Q{idx + 1}.</span>
-                      {q.content}
-                    </p>
+              <div className="flex items-start gap-4">
+                {/* 문제 번호 배지 */}
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[#1e1e2e] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
+                  {idx + 1}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-medium text-[#ededf0]">{q.content}</p>
                     {q.answerCount > 1 && (
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                        복수 정답 {q.answerCount}개
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#1e1e2e] text-[#5e6ad2]">
+                        복수 {q.answerCount}개
                       </span>
                     )}
                   </div>
-                  <div className="mt-2 flex flex-col gap-1 pl-6">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {q.choices.map((c) => (
-                      <p key={c.id} className="text-sm text-gray-600">
+                      <p key={c.id} className="text-xs text-[#44445a]">
                         {c.order}. {c.content}
                       </p>
                     ))}
                   </div>
                 </div>
+
                 <Button
                   variant="danger"
                   size="sm"
                   onClick={() => setDeleteTargetId(q.id)}
+                  className="shrink-0"
                 >
                   삭제
                 </Button>
@@ -590,7 +508,6 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
-      {/* 삭제 확인 모달 */}
       <Modal
         isOpen={!!deleteTargetId}
         title="문제를 삭제하시겠습니까?"

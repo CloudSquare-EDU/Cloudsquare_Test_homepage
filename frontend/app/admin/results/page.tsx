@@ -1,12 +1,4 @@
 // app/admin/results/page.tsx
-// 역할: 관리자 응시 결과 관리 페이지
-// 구조: 시험 목록 → 클릭하면 해당 시험에 할당된 사용자별 응시 현황 펼쳐보기
-// 기능:
-//   1. 전체 시험 목록 표시 — 응시 완료 수 / 전체 할당 수 요약
-//   2. 시험 클릭 시 사용자별 점수, 응시일, 미응시 여부 표시
-//   3. 재응시 허용 버튼 — submission 삭제로 재응시 가능하게 처리
-//   4. 결과 상세 링크
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -18,14 +10,32 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
 
+const formatDuration = (s: number) => {
+  if (s === 0) return '제한 없음';
+  if (s < 3600) return `${Math.floor(s / 60)}분`;
+  return `${Math.floor(s / 3600)}시간`;
+};
+
+const scoreColor = (score: number | null): string => {
+  if (score === null) return 'text-[#55556a]';
+  if (score >= 80) return 'text-green-400';
+  if (score >= 60) return 'text-yellow-400';
+  return 'text-red-400';
+};
+
+const scoreBadge = (score: number | null): string => {
+  if (score === null) return 'bg-[#1a1a22] text-[#55556a]';
+  if (score >= 80) return 'bg-[#0f2318] text-green-400';
+  if (score >= 60) return 'bg-[#1e1a0d] text-yellow-400';
+  return 'bg-[#250d0d] text-red-400';
+};
+
 export default function AdminResultsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
   const [examStatus, setExamStatus] = useState<Record<string, ExamSubmissionStatus>>({});
   const [loadingExamId, setLoadingExamId] = useState<string | null>(null);
-
-  // 재응시 허용 확인 모달
   const [resetTarget, setResetTarget] = useState<{
     submissionId: string;
     userName: string;
@@ -44,13 +54,9 @@ export default function AdminResultsPage() {
   }, []);
 
   const toggleExam = async (examId: string) => {
-    if (expandedExamId === examId) {
-      setExpandedExamId(null);
-      return;
-    }
+    if (expandedExamId === examId) { setExpandedExamId(null); return; }
     setExpandedExamId(examId);
-    if (examStatus[examId]) return; // 캐시 있으면 재요청 안 함
-
+    if (examStatus[examId]) return;
     setLoadingExamId(examId);
     try {
       const data = await submissionsApi.getByExam(examId);
@@ -67,7 +73,6 @@ export default function AdminResultsPage() {
     setIsResetting(true);
     try {
       await submissionsApi.reset(resetTarget.submissionId);
-      // 캐시 갱신
       const data = await submissionsApi.getByExam(resetTarget.examId);
       setExamStatus((prev) => ({ ...prev, [resetTarget.examId]: data }));
       setResetTarget(null);
@@ -78,18 +83,10 @@ export default function AdminResultsPage() {
     }
   };
 
-  // 점수 색상
-  const scoreColor = (score: number | null) => {
-    if (score === null) return '';
-    if (score >= 80) return 'bg-green-100 text-green-700';
-    if (score >= 60) return 'bg-yellow-100 text-yellow-700';
-    return 'bg-red-100 text-red-700';
-  };
-
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-gray-500">로딩 중...</p>
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
       </div>
     );
   }
@@ -97,167 +94,161 @@ export default function AdminResultsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">응시 결과 관리</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          시험별로 할당된 사용자의 응시 현황을 확인하고 재응시를 허용할 수 있습니다.
+        <h1 className="text-xl font-semibold text-[#ededf0]">응시 결과</h1>
+        <p className="mt-0.5 text-sm text-[#55556a]">
+          시험별 응시 현황 확인 및 재응시 허용
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+          {error}
+        </div>
       )}
 
       {exams.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center text-gray-500">
-          등록된 시험이 없습니다.
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
+          <p className="text-sm text-[#55556a]">등록된 시험이 없습니다</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {exams.map((exam) => {
             const isExpanded = expandedExamId === exam.id;
             const status = examStatus[exam.id];
             const isLoadingThis = loadingExamId === exam.id;
-
-            // 응시 완료 수 계산 (캐시 있을 때만)
-            const submittedCount = status
-              ? status.users.filter((u) => u.submitted).length
-              : null;
-            const totalAssigned = status ? status.users.length : exam._count?.submissions;
+            const submittedCount = status ? status.users.filter((u) => u.submitted).length : null;
+            const totalAssigned = status ? status.users.length : null;
 
             return (
               <div
                 key={exam.id}
-                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+                className="overflow-hidden rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] transition-colors hover:border-[rgba(255,255,255,0.1)]"
               >
-                {/* 시험 헤더 — 클릭으로 펼치기 */}
+                {/* 시험 헤더 */}
                 <button
                   onClick={() => toggleExam(exam.id)}
-                  className="flex w-full items-center justify-between p-5 text-left transition hover:bg-gray-50"
+                  className="flex w-full items-center gap-4 px-5 py-4 text-left"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-lg">
-                      📝
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{exam.title}</p>
-                      <p className="text-sm text-gray-500">
-                        {exam.duration > 0 ? `${Math.floor(exam.duration / 60)}분` : '제한 없음'}
-                        {' · '}문제 {exam._count?.questions ?? 0}개
-                      </p>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1e1e2e] text-[#5e6ad2]">
+                    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
+                      <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-[#ededf0] truncate">{exam.title}</p>
+                    <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                      <span>문제 {exam._count?.questions ?? 0}개</span>
+                      <span>·</span>
+                      <span>{formatDuration(exam.duration)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    {submittedCount !== null ? (
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700 font-medium">
-                        {submittedCount} / {totalAssigned}명 응시
+                  <div className="flex items-center gap-3 shrink-0">
+                    {submittedCount !== null && totalAssigned !== null ? (
+                      <span className="rounded px-2 py-1 text-xs bg-[#1e1e2e] text-[#9090aa]">
+                        <span className="text-[#ededf0] font-medium">{submittedCount}</span>
+                        <span className="text-[#44445a]">/{totalAssigned}</span>
+                        <span className="ml-1">명 응시</span>
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">
-                        응시 {exam._count?.submissions ?? 0}회
-                      </span>
+                      <span className="text-xs text-[#44445a]">응시 {exam._count?.submissions ?? 0}회</span>
                     )}
-                    <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                    <svg
+                      className={`h-3.5 w-3.5 text-[#44445a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+                    >
+                      <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </div>
                 </button>
 
                 {/* 펼쳐진 사용자 목록 */}
                 {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50">
+                  <div className="border-t border-[rgba(255,255,255,0.06)]">
                     {isLoadingThis ? (
-                      <p className="py-6 text-center text-sm text-gray-500">로딩 중...</p>
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+                      </div>
                     ) : !status || status.users.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-gray-500">
+                      <p className="py-6 text-center text-sm text-[#55556a]">
                         할당된 사용자가 없습니다.
                       </p>
                     ) : (
                       <>
-                        {/* 응시 현황 요약 바 */}
-                        <div className="flex items-center gap-4 border-b border-gray-200 bg-white px-5 py-3">
+                        {/* 요약 바 */}
+                        <div className="flex items-center gap-5 border-b border-[rgba(255,255,255,0.05)] bg-[#13131a] px-5 py-2.5">
                           <div className="flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                            <span className="text-xs text-gray-600">
-                              응시 완료 {status.users.filter((u) => u.submitted).length}명
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                            <span className="text-xs text-[#55556a]">
+                              완료 <span className="text-[#ededf0]">{status.users.filter((u) => u.submitted).length}</span>명
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full bg-gray-300" />
-                            <span className="text-xs text-gray-600">
-                              미응시 {status.users.filter((u) => !u.submitted).length}명
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#33334a]" />
+                            <span className="text-xs text-[#55556a]">
+                              미응시 <span className="text-[#9090aa]">{status.users.filter((u) => !u.submitted).length}</span>명
                             </span>
                           </div>
                           {status.users.filter((u) => u.submitted).length > 0 && (
-                            <div className="ml-auto text-xs text-gray-500">
-                              평균 점수:{' '}
-                              <strong className="text-gray-800">
+                            <div className="ml-auto text-xs text-[#55556a]">
+                              평균{' '}
+                              <span className="font-semibold text-[#ededf0]">
                                 {Math.round(
                                   status.users
                                     .filter((u) => u.submitted && u.submission?.score !== null)
                                     .reduce((sum, u) => sum + (u.submission?.score ?? 0), 0) /
                                     status.users.filter((u) => u.submitted).length,
                                 )}
-                                점
-                              </strong>
+                              </span>
+                              점
                             </div>
                           )}
                         </div>
 
                         {/* 사용자별 행 */}
-                        <div className="divide-y divide-gray-100">
+                        <div className="divide-y divide-[rgba(255,255,255,0.04)]">
                           {status.users.map((userStatus: ExamUserStatus) => (
                             <div
                               key={userStatus.userId}
-                              className="flex items-center justify-between px-5 py-4"
+                              className="flex items-center justify-between px-5 py-3.5"
                             >
-                              {/* 사용자 정보 */}
+                              {/* 사용자 */}
                               <div className="flex items-center gap-3">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e1e2e] text-xs font-semibold text-[#5e6ad2]">
                                   {userStatus.userName.charAt(0)}
                                 </div>
                                 <div>
-                                  <p className="font-medium text-gray-800">{userStatus.userName}</p>
-                                  <p className="text-xs text-gray-400">{userStatus.userEmail}</p>
+                                  <p className="text-sm font-medium text-[#ededf0]">{userStatus.userName}</p>
+                                  <p className="text-xs text-[#44445a]">{userStatus.userEmail}</p>
                                 </div>
                               </div>
 
-                              {/* 응시 결과 영역 */}
+                              {/* 결과 영역 */}
                               <div className="flex items-center gap-3">
                                 {userStatus.submitted && userStatus.submission ? (
                                   <>
-                                    {/* 점수 */}
-                                    <div className="text-right">
-                                      <span
-                                        className={`inline-block rounded-full px-3 py-1 text-sm font-bold ${scoreColor(userStatus.submission.score)}`}
-                                      >
-                                        {userStatus.submission.score}점
-                                      </span>
-                                      <p className="mt-0.5 text-xs text-gray-400">
-                                        {userStatus.submission.totalQuestions}문제 중{' '}
-                                        {Math.round(
-                                          ((userStatus.submission.score ?? 0) / 100) *
-                                            userStatus.submission.totalQuestions,
-                                        )}
-                                        개 정답
-                                      </p>
-                                    </div>
+                                    {/* 점수 뱃지 */}
+                                    <span className={`rounded px-2 py-0.5 text-sm font-bold ${scoreBadge(userStatus.submission.score)}`}>
+                                      {userStatus.submission.score}점
+                                    </span>
+
+                                    {/* 정답 수 */}
+                                    <span className="text-xs text-[#44445a]">
+                                      {Math.round(((userStatus.submission.score ?? 0) / 100) * userStatus.submission.totalQuestions)}
+                                      /{userStatus.submission.totalQuestions}
+                                    </span>
 
                                     {/* 응시일 */}
-                                    <div className="text-right text-xs text-gray-400 min-w-[70px]">
-                                      {new Date(userStatus.submission.submittedAt).toLocaleDateString('ko-KR')}
-                                      <br />
-                                      {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
-                                    </div>
+                                    <span className={`text-xs ${scoreColor(null)} text-[#44445a] text-right min-w-[60px]`}>
+                                      {new Date(userStatus.submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
+                                      {' '}
+                                      {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
 
-                                    {/* 결과 상세 보기 */}
                                     <Link href={`/submissions/${userStatus.submission.id}`}>
-                                      <Button variant="secondary" size="sm">
-                                        결과 보기
-                                      </Button>
+                                      <Button variant="secondary" size="sm">결과 보기</Button>
                                     </Link>
 
-                                    {/* 재응시 허용 */}
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -270,11 +261,11 @@ export default function AdminResultsPage() {
                                         })
                                       }
                                     >
-                                      🔄 재응시
+                                      재응시
                                     </Button>
                                   </>
                                 ) : (
-                                  <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-400">
+                                  <span className="rounded px-2 py-0.5 text-xs bg-[#1a1a22] text-[#44445a]">
                                     미응시
                                   </span>
                                 )}
@@ -292,7 +283,6 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* 재응시 허용 확인 모달 */}
       <Modal
         isOpen={!!resetTarget}
         title="재응시를 허용하시겠습니까?"

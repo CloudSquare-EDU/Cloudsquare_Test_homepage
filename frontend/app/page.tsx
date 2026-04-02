@@ -1,24 +1,32 @@
 // app/page.tsx
-// 역할: 메인 페이지 — 공개된 시험 목록 표시
-
+// 사용자 시험 목록 — 응시 완료 배지 + duration 0 처리
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { examsApi } from '@/lib/api/exams';
-import { ExamSummary } from '@/lib/types';
-import { Button } from '@/components/ui/Button';
+import { submissionsApi } from '@/lib/api/submissions';
+import { ExamSummary, SubmissionSummary } from '@/lib/types';
 import { useAuthStore } from '@/lib/store/authStore';
+import { Button } from '@/components/ui/Button';
+
+const formatDuration = (seconds: number) => {
+  if (seconds === 0) return '제한 없음';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}분`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+};
 
 export default function HomePage() {
   const { user, isInitialized } = useAuthStore();
   const router = useRouter();
   const [exams, setExams] = useState<ExamSummary[]>([]);
+  const [submissionMap, setSubmissionMap] = useState<Record<string, SubmissionSummary>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ADMIN은 관리자 대시보드로 자동 이동
   useEffect(() => {
     if (!isInitialized) return;
     if (!user) { router.push('/auth/login'); return; }
@@ -26,11 +34,15 @@ export default function HomePage() {
   }, [user, isInitialized, router]);
 
   useEffect(() => {
-    if (!isInitialized) return;
-    if (!user || user.role === 'ADMIN') { setIsLoading(false); return; }
-    examsApi
-      .getAll()
-      .then(setExams)
+    if (!isInitialized || !user || user.role === 'ADMIN') { setIsLoading(false); return; }
+
+    Promise.all([examsApi.getAll(), submissionsApi.getMy()])
+      .then(([examList, submissions]) => {
+        setExams(examList);
+        const map: Record<string, SubmissionSummary> = {};
+        submissions.forEach((s) => { map[s.exam.id] = s; });
+        setSubmissionMap(map);
+      })
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   }, [user, isInitialized]);
@@ -38,52 +50,112 @@ export default function HomePage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-gray-500">시험 목록 로딩 중...</p>
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-700">
-        <p>{error}</p>
-        <Link href="/auth/login" className="mt-2 inline-block text-sm underline">
-          로그인 후 다시 시도해주세요
-        </Link>
+      <div className="rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] p-3 text-sm text-[#f87171]">
+        {error}
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">시험 목록</h1>
+      {/* 페이지 헤더 */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-[#ededf0]">시험 목록</h1>
+          <p className="mt-0.5 text-sm text-[#55556a]">
+            {exams.length > 0 ? `${exams.length}개의 시험이 할당되었습니다` : '할당된 시험이 없습니다'}
+          </p>
+        </div>
+        <Link href="/submissions">
+          <Button variant="ghost" size="sm">
+            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 5v3l2 2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            내 결과
+          </Button>
+        </Link>
+      </div>
 
       {exams.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center text-gray-500">
-          <p>현재 응시 가능한 시험이 없습니다.</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-20 text-center">
+          <div className="mb-3 text-3xl">📋</div>
+          <p className="text-sm text-[#55556a]">아직 할당된 시험이 없습니다</p>
+          <p className="mt-1 text-xs text-[#44445a]">관리자에게 시험 할당을 요청하세요</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {exams.map((exam) => (
-            <div
-              key={exam.id}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-            >
-              <h2 className="mb-1 text-lg font-semibold text-gray-900">{exam.title}</h2>
-              {exam.description && (
-                <p className="mb-3 text-sm text-gray-500 line-clamp-2">{exam.description}</p>
-              )}
-              <div className="mb-4 flex gap-4 text-sm text-gray-600">
-                <span>📝 {exam.questionCount}문제</span>
-                <span>⏱ {Math.floor(exam.duration / 60)}분</span>
+        <div className="flex flex-col gap-2">
+          {exams.map((exam) => {
+            const submission = submissionMap[exam.id];
+            const done = !!submission;
+
+            return (
+              <div
+                key={exam.id}
+                className={`
+                  flex items-center gap-4 rounded-lg border px-5 py-4 transition-colors
+                  ${done
+                    ? 'border-[rgba(255,255,255,0.06)] bg-[#18181f]'
+                    : 'border-[rgba(255,255,255,0.08)] bg-[#18181f] hover:border-[rgba(255,255,255,0.14)] hover:bg-[#1e1e28]'
+                  }
+                `}
+              >
+                {/* 상태 아이콘 */}
+                <div className={`
+                  flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm
+                  ${done ? 'bg-[#0f2318] text-green-400' : 'bg-[#1e1e28] text-[#9090aa]'}
+                `}>
+                  {done ? '✓' : '📝'}
+                </div>
+
+                {/* 시험 정보 */}
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium truncate ${done ? 'text-[#9090aa]' : 'text-[#ededf0]'}`}>
+                    {exam.title}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                    <span>{exam.questionCount}문제</span>
+                    <span>⏱ {formatDuration(exam.duration)}</span>
+                    {done && (
+                      <span className="text-green-500">
+                        {new Date(submission.submittedAt).toLocaleDateString('ko-KR')} 응시
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 점수 배지 or 응시하기 */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {done ? (
+                    <>
+                      <span className={`
+                        rounded-md px-2.5 py-1 text-sm font-bold
+                        ${(submission.score ?? 0) >= 80 ? 'bg-[#0f2318] text-green-400' :
+                          (submission.score ?? 0) >= 60 ? 'bg-[#211800] text-yellow-400' :
+                          'bg-[#250d0d] text-red-400'}
+                      `}>
+                        {submission.score}점
+                      </span>
+                      <Link href={`/submissions/${submission.id}`}>
+                        <Button variant="ghost" size="sm">결과 보기</Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href={`/exams/${exam.id}`}>
+                      <Button size="sm">응시하기</Button>
+                    </Link>
+                  )}
+                </div>
               </div>
-              <Link href={`/exams/${exam.id}`}>
-                <Button size="sm" className="w-full">
-                  응시하기
-                </Button>
-              </Link>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,7 +1,4 @@
 // lib/hooks/useTimer.ts
-// 역할: 시험 타이머 커스텀 훅
-// 설계 이유: 타이머 로직을 재사용 가능한 훅으로 분리, 만료 시 콜백 자동 호출
-
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -9,22 +6,28 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 interface UseTimerOptions {
   initialSeconds: number;
   onExpire: () => void;
+  paused?: boolean; // true면 카운트다운 정지 (인트로 화면에서 사용)
 }
 
 interface UseTimerReturn {
   secondsLeft: number;
   formattedTime: string;
   isExpired: boolean;
-  isWarning: boolean; // 남은 시간 5분 이하일 때 true
+  isWarning: boolean;
 }
 
-export const useTimer = ({ initialSeconds, onExpire }: UseTimerOptions): UseTimerReturn => {
+export const useTimer = ({ initialSeconds, onExpire, paused = false }: UseTimerOptions): UseTimerReturn => {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
 
-  const isExpired = secondsLeft <= 0;
-  const isWarning = secondsLeft <= 300 && !isExpired; // 5분 이하
+  // initialSeconds가 변경되면(=exam 로드 완료) 초기화
+  useEffect(() => {
+    setSecondsLeft(initialSeconds);
+  }, [initialSeconds]);
+
+  const isExpired = secondsLeft <= 0 && initialSeconds > 0;
+  const isWarning = secondsLeft > 0 && secondsLeft <= 300;
 
   const tick = useCallback(() => {
     setSecondsLeft((prev) => {
@@ -37,14 +40,19 @@ export const useTimer = ({ initialSeconds, onExpire }: UseTimerOptions): UseTime
   }, []);
 
   useEffect(() => {
+    if (paused) return;
     if (isExpired) return;
+    if (initialSeconds === 0) return; // 제한 없음
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [tick, isExpired]);
+  }, [tick, isExpired, paused, initialSeconds]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
-  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const formattedTime =
+    initialSeconds === 0
+      ? '∞'
+      : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
   return { secondsLeft, formattedTime, isExpired, isWarning };
 };
