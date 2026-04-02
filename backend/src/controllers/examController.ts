@@ -10,13 +10,17 @@ import * as userExamService from '../services/userExamService';
 const createExamSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요.').max(200),
   description: z.string().max(1000).optional(),
-  duration: z.number().int().positive('제한 시간은 양수여야 합니다.'),
+  duration: z.number().int().min(0, '제한 시간은 0 이상이어야 합니다.'),
+  questionBankId: z.string().optional(),
+  questionCount: z.number().int().positive().optional(),
 });
 
 const updateExamSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
-  duration: z.number().int().positive().optional(),
+  duration: z.number().int().min(0).optional(),
+  questionBankId: z.string().nullable().optional(),
+  questionCount: z.number().int().positive().nullable().optional(),
 });
 
 export const getExams = async (
@@ -85,7 +89,9 @@ export const getExamById = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const exam = await examService.getExamById(req.params.id);
+    // 문제은행 기반 시험이면 userId 전달 → 배정 문제 반환
+    const userId = req.user?.userId;
+    const exam = await examService.getExamById(req.params.id, userId);
     res.json({ success: true, data: exam });
   } catch (err) {
     next(err);

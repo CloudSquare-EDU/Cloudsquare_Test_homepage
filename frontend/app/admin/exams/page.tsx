@@ -5,7 +5,8 @@ import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { coursesApi } from '@/lib/api/courses';
-import { AdminExam, CourseSummary } from '@/lib/types';
+import { questionBanksApi } from '@/lib/api/questionBanks';
+import { AdminExam, CourseSummary, QuestionBankSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -21,7 +22,7 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '' });
+  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '' });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -29,6 +30,8 @@ export default function AdminExamsPage() {
 
   // 과정 목록
   const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
+  // 문제은행 목록
+  const [allBanks, setAllBanks] = useState<QuestionBankSummary[]>([]);
 
   // 과정 변경 모달
   const [courseTarget, setCourseTarget] = useState<AdminExam | null>(null);
@@ -44,12 +47,19 @@ export default function AdminExamsPage() {
   const loadCourses = () => {
     coursesApi.getAll()
       .then(setAllCourses)
-      .catch(() => { /* 과정 로드 실패는 무시 */ });
+      .catch(() => { /* 무시 */ });
+  };
+
+  const loadBanks = () => {
+    questionBanksApi.getAll()
+      .then(setAllBanks)
+      .catch(() => { /* 무시 */ });
   };
 
   useEffect(() => {
     loadExams();
     loadCourses();
+    loadBanks();
   }, []);
 
   const handleCreate = async (e: FormEvent) => {
@@ -57,22 +67,19 @@ export default function AdminExamsPage() {
     setIsCreating(true);
     setError(null);
     try {
-      await examsApi.create({
+      const created = await examsApi.create({
         title: form.title,
         description: form.description || undefined,
         duration: form.duration,
+        questionBankId: form.questionBankId || undefined,
+        questionCount: form.questionCount ? parseInt(form.questionCount, 10) : undefined,
       });
-      // 시험 생성 후 과정 매핑
-      if (form.courseId) {
-        const created = await examsApi.getAllAdmin();
-        // 방금 만든 시험 찾기 (제목 기준)
-        const newExam = created.find((e) => e.title === form.title);
-        if (newExam) {
-          await coursesApi.assignExam(form.courseId, newExam.id);
-        }
+      // 과정 매핑
+      if (form.courseId && created.id) {
+        await coursesApi.assignExam(form.courseId, created.id);
       }
       setShowCreate(false);
-      setForm({ title: '', description: '', duration: 3600, courseId: '' });
+      setForm({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '' });
       loadExams();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '생성 중 오류가 발생했습니다.');
@@ -198,6 +205,36 @@ export default function AdminExamsPage() {
                 />
               </div>
             </div>
+            {/* 문제은행 연결 (선택) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">문제은행 연결 (선택)</label>
+              <select
+                value={form.questionBankId}
+                onChange={(e) => setForm({ ...form, questionBankId: e.target.value, questionCount: '' })}
+                className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+              >
+                <option value="">문제은행 없음 (수동 등록)</option>
+                {allBanks.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} ({b._count.questions}문제)</option>
+                ))}
+              </select>
+              {form.questionBankId && (
+                <div className="mt-1 flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-[var(--text-secondary)]">사용자별 출제 문제 수</label>
+                  <input
+                    type="number"
+                    value={form.questionCount}
+                    onChange={(e) => setForm({ ...form, questionCount: e.target.value })}
+                    placeholder={`최대 ${allBanks.find((b) => b.id === form.questionBankId)?._count.questions ?? '?'}개`}
+                    className="h-8 w-32 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+                    min={1}
+                  />
+                  <p className="text-[10px] text-[#5e6ad2]">
+                    각 계정마다 문제은행에서 이 수만큼 랜덤 배정됩니다.
+                  </p>
+                </div>
+              )}
+            </div>
             {/* 과정 매핑 (선택) */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[var(--text-secondary)]">과정 매핑 (선택)</label>
@@ -246,6 +283,12 @@ export default function AdminExamsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
+                  {/* 문제은행 배지 */}
+                  {exam.questionBank && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(110,180,110,0.12)] text-[#4a9e5c] border border-[rgba(110,180,110,0.25)]">
+                      🏦 {exam.questionBank.name}
+                    </span>
+                  )}
                   {/* 과정 배지 */}
                   {exam.course && (
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
@@ -262,7 +305,10 @@ export default function AdminExamsPage() {
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                  <span>문제 {exam._count.questions}개</span>
+                  {exam.questionBank
+                    ? <span>문제은행 {exam.questionBank._count.questions}개 중 {exam.questionCount ?? '전체'}개 출제</span>
+                    : <span>문제 {exam._count.questions}개</span>
+                  }
                   <span>·</span>
                   <span>응시 {exam._count.submissions}회</span>
                   <span>·</span>

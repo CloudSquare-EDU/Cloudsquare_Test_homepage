@@ -56,6 +56,12 @@ const IcCourse = () => (
   </svg>
 );
 
+const IcBank = () => (
+  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M2 6h12M2 6l6-4 6 4M2 6v1h12V6M3 7v5M6 7v5M10 7v5M13 7v5M2 12h12" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const IcLogout = () => (
   <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" strokeLinecap="round" strokeLinejoin="round" />
@@ -79,6 +85,7 @@ const USER_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { label: '대시보드', href: '/admin', shortcutKey: 'h', exact: true, icon: <IcGrid /> },
+  { label: '문제은행', href: '/admin/question-banks', shortcutKey: 'b', icon: <IcBank /> },
   { label: '과정 관리', href: '/admin/courses', shortcutKey: 'c', icon: <IcCourse /> },
   { label: '시험 관리', href: '/admin/exams', shortcutKey: 'e', icon: <IcDoc /> },
   { label: '사용자 관리', href: '/admin/users', shortcutKey: 'u', icon: <IcUsers /> },

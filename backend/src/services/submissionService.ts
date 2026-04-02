@@ -1,10 +1,10 @@
 // submissionService.ts
 // 역할: 시험 제출 + 즉시 채점 비즈니스 로직
 // 설계 포인트:
-//   - 제출 시 DB에서 정답을 조회하고 채점한 뒤 결과를 단일 트랜잭션으로 저장
-//   - isPublished 여부와 무관하게 UserExam 할당 여부만으로 응시 권한 결정
+//   - 수동 문제 시험: Question/Choice 기반 채점 (기존)
+//   - 문제은행 시험: BankQuestion/BankChoice 기반 채점 (신규)
 //   - 동일 시험 중복 응시 차단 (관리자가 reset하기 전까지 재응시 불가)
-//   - 선다형 지원: choiceIds 배열로 복수 선택, 정답 집합과 정확히 일치해야 정답 처리 (all-or-nothing)
+//   - 재응시 시 UserExamQuestion도 함께 초기화
 
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
@@ -25,60 +25,130 @@ interface SubmitInput {
 export const submitExam = async (input: SubmitInput) => {
   const { userId, examId, answers } = input;
 
-  // 1. 시험 존재 확인 (isPublished 조건 제거 — 할당 방식으로만 접근 제어)
+  // 1. 시험 존재 확인
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: {
-      questions: {
-        include: { choices: true },
-      },
+      questions: { include: { choices: true } },
     },
   });
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
 
   // 2. 응시 권한 확인: UserExam 직접 할당 OR 과정(course) 기반 접근
-  const [assignment, user] = await Promise.all([
-    prisma.userExam.findUnique({
-      where: { userId_examId: { userId, examId } },
-    }),
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { courseId: true },
-    }),
+  const [directAssignment, user] = await Promise.all([
+    prisma.userExam.findUnique({ where: { userId_examId: { userId, examId } } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { courseId: true } }),
   ]);
 
-  const hasDirectAccess = !!assignment;
+  const hasDirectAccess = !!directAssignment;
   const hasCourseAccess = !!(user?.courseId && exam.courseId && user.courseId === exam.courseId);
+  const isBankBased = !!exam.questionBankId;
 
+  // 문제은행 기반 시험은 과정 접근 또는 직접 할당 모두 허용
   if (!hasDirectAccess && !hasCourseAccess) {
     throw new AppError(403, ErrorCode.FORBIDDEN, '이 시험에 대한 응시 권한이 없습니다.');
   }
 
-  // 3. 중복 응시 차단 — 이미 제출 기록이 있으면 거부
-  const existingSubmission = await prisma.submission.findFirst({
-    where: { userId, examId },
-  });
+  // 3. 중복 응시 차단
+  const existingSubmission = await prisma.submission.findFirst({ where: { userId, examId } });
   if (existingSubmission) {
-    throw new AppError(
-      409,
-      ErrorCode.CONFLICT,
-      '이미 응시한 시험입니다. 재응시하려면 관리자에게 문의하세요.',
-    );
+    throw new AppError(409, ErrorCode.CONFLICT, '이미 응시한 시험입니다. 재응시하려면 관리자에게 문의하세요.');
   }
 
+  // ── 문제은행 기반 채점 ────────────────────────────────────────
+  if (isBankBased) {
+    // 사용자에게 배정된 bankQuestionId 목록 확인
+    const assigned = await prisma.userExamQuestion.findMany({
+      where: { userId, examId },
+      include: {
+        bankQuestion: { include: { choices: true } },
+      },
+    });
+
+    if (assigned.length === 0) {
+      throw new AppError(400, ErrorCode.BAD_REQUEST, '배정된 문제가 없습니다. 시험 페이지를 먼저 열어주세요.');
+    }
+
+    const totalQuestions = assigned.length;
+    if (answers.length !== totalQuestions) {
+      throw new AppError(400, ErrorCode.BAD_REQUEST,
+        `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
+    }
+
+    type BankAnswerRecord = {
+      bankQuestionId: string; bankChoiceId: string; isCorrect: boolean;
+    };
+    const gradedAnswerRecords: BankAnswerRecord[] = [];
+    let correctCount = 0;
+    const questionResultMap: Record<string, { isCorrect: boolean; correctChoiceIds: string[] }> = {};
+
+    for (const answer of answers) {
+      const ueq = assigned.find((a) => a.bankQuestionId === answer.questionId);
+      if (!ueq) {
+        throw new AppError(400, ErrorCode.BAD_REQUEST, `배정되지 않은 문제입니다: ${answer.questionId}`);
+      }
+      const q = ueq.bankQuestion;
+
+      for (const cId of answer.choiceIds) {
+        if (!q.choices.some((c) => c.id === cId)) {
+          throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 선택지: ${cId}`);
+        }
+      }
+
+      const correctChoiceIds = q.choices.filter((c) => c.isCorrect).map((c) => c.id);
+      const selectedSet = new Set(answer.choiceIds);
+      const correctSet = new Set(correctChoiceIds);
+      const isQuestionCorrect =
+        selectedSet.size === correctSet.size && [...correctSet].every((id) => selectedSet.has(id));
+
+      if (isQuestionCorrect) correctCount++;
+      questionResultMap[answer.questionId] = { isCorrect: isQuestionCorrect, correctChoiceIds };
+
+      for (const choiceId of answer.choiceIds) {
+        gradedAnswerRecords.push({ bankQuestionId: answer.questionId, bankChoiceId: choiceId, isCorrect: isQuestionCorrect });
+      }
+    }
+
+    const score = Math.round((correctCount / totalQuestions) * 100);
+
+    const submission = await prisma.$transaction(async (tx) => {
+      return tx.submission.create({
+        data: {
+          userId, examId, score, totalQuestions,
+          answers: {
+            create: gradedAnswerRecords.map((a) => ({
+              bankQuestionId: a.bankQuestionId,
+              bankChoiceId: a.bankChoiceId,
+              isCorrect: a.isCorrect,
+            })),
+          },
+        },
+      });
+    });
+
+    return {
+      submissionId: submission.id,
+      score,
+      totalQuestions,
+      correctCount,
+      answers: Object.entries(questionResultMap).map(([questionId, r]) => ({
+        questionId,
+        choiceIds: gradedAnswerRecords.filter((a) => a.bankQuestionId === questionId).map((a) => a.bankChoiceId),
+        isCorrect: r.isCorrect,
+        correctChoiceIds: r.correctChoiceIds,
+      })),
+    };
+  }
+
+  // ── 수동 문제 채점 (기존) ──────────────────────────────────────
   const totalQuestions = exam.questions.length;
-
-  // 4. 제출 답안 수와 문제 수 일치 여부 확인
   if (answers.length !== totalQuestions) {
-    throw new AppError(
-      400,
-      ErrorCode.BAD_REQUEST,
-      `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`,
-    );
+    throw new AppError(400, ErrorCode.BAD_REQUEST,
+      `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
   }
 
-  // 5. 채점: 선다형 — 선택한 집합이 정답 집합과 정확히 일치해야 정답 (all-or-nothing)
-  const gradedAnswerRecords: Array<{ questionId: string; choiceId: string; isCorrect: boolean }> = [];
+  type ManualAnswerRecord = { questionId: string; choiceId: string; isCorrect: boolean };
+  const gradedAnswerRecords: ManualAnswerRecord[] = [];
   let correctCount = 0;
   const questionResultMap: Record<string, { isCorrect: boolean; correctChoiceIds: string[] }> = {};
 
@@ -87,49 +157,31 @@ export const submitExam = async (input: SubmitInput) => {
     if (!question) {
       throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 questionId: ${answer.questionId}`);
     }
-
-    // 선택한 모든 choiceId가 이 문제의 선택지인지 확인
     for (const choiceId of answer.choiceIds) {
-      const choiceExists = question.choices.some((c) => c.id === choiceId);
-      if (!choiceExists) {
+      if (!question.choices.some((c) => c.id === choiceId)) {
         throw new AppError(400, ErrorCode.BAD_REQUEST, `유효하지 않은 choiceId: ${choiceId}`);
       }
     }
-
-    // 이 문제의 정답 집합
     const correctChoiceIds = question.choices.filter((c) => c.isCorrect).map((c) => c.id);
     const selectedSet = new Set(answer.choiceIds);
     const correctSet = new Set(correctChoiceIds);
-
-    // 선택 집합 == 정답 집합이어야 정답
     const isQuestionCorrect =
-      selectedSet.size === correctSet.size &&
-      [...correctSet].every((id) => selectedSet.has(id));
+      selectedSet.size === correctSet.size && [...correctSet].every((id) => selectedSet.has(id));
 
     if (isQuestionCorrect) correctCount++;
-
     questionResultMap[answer.questionId] = { isCorrect: isQuestionCorrect, correctChoiceIds };
 
-    // 선택한 각 choiceId마다 Answer 레코드 1개씩 생성 (복수 선택 지원)
     for (const choiceId of answer.choiceIds) {
-      gradedAnswerRecords.push({
-        questionId: answer.questionId,
-        choiceId,
-        isCorrect: isQuestionCorrect,
-      });
+      gradedAnswerRecords.push({ questionId: answer.questionId, choiceId, isCorrect: isQuestionCorrect });
     }
   }
 
   const score = Math.round((correctCount / totalQuestions) * 100);
 
-  // 6. 트랜잭션으로 Submission + Answer 동시 저장
   const submission = await prisma.$transaction(async (tx) => {
-    const created = await tx.submission.create({
+    return tx.submission.create({
       data: {
-        userId,
-        examId,
-        score,
-        totalQuestions,
+        userId, examId, score, totalQuestions,
         answers: {
           create: gradedAnswerRecords.map((a) => ({
             questionId: a.questionId,
@@ -138,21 +190,11 @@ export const submitExam = async (input: SubmitInput) => {
           })),
         },
       },
-      include: {
-        answers: {
-          include: {
-            question: { select: { id: true, content: true } },
-            choice: { select: { id: true, content: true } },
-          },
-        },
-      },
     });
-    return created;
   });
 
-  // 응답: questionId 기준으로 그룹핑하여 선택한 choiceIds 목록 반환
   const answersByQuestion = new Map<string, string[]>();
-  for (const a of submission.answers) {
+  for (const a of gradedAnswerRecords) {
     const ids = answersByQuestion.get(a.questionId) ?? [];
     ids.push(a.choiceId);
     answersByQuestion.set(a.questionId, ids);
@@ -301,9 +343,19 @@ export const getSubmissionsByExam = async (examId: string) => {
   };
 };
 
-// 관리자: 재응시 허용 — 특정 submission 삭제
+// 관리자: 재응시 허용 — submission 삭제 + 문제은행 배정 초기화
 export const resetSubmission = async (submissionId: string) => {
   const submission = await prisma.submission.findUnique({ where: { id: submissionId } });
   if (!submission) throw new AppError(404, ErrorCode.NOT_FOUND, '응시 기록을 찾을 수 없습니다.');
-  await prisma.submission.delete({ where: { id: submissionId } });
+
+  const { resetAssignment } = await import('./userExamAssignmentService');
+
+  await prisma.$transaction(async (tx) => {
+    // Answer 삭제 → Submission 삭제
+    await tx.answer.deleteMany({ where: { submissionId } });
+    await tx.submission.delete({ where: { id: submissionId } });
+  });
+
+  // 문제은행 배정 초기화 (다음 응시 시 새 문제 랜덤 배정)
+  await resetAssignment(submission.userId, submission.examId);
 };

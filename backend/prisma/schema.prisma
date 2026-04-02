@@ -17,7 +17,6 @@ enum Role {
 
 // ─────────────────────────────────────────
 // Course — 과정 (e.g. "OO대학교 네이버클라우드 아카데미")
-// 여러 계정과 여러 시험을 묶는 단위
 // ─────────────────────────────────────────
 model Course {
   id          String   @id @default(cuid())
@@ -33,21 +32,97 @@ model Course {
 }
 
 // ─────────────────────────────────────────
+// QuestionBank — 문제은행 (문제 풀)
+// 예: "소버린AI 과정 문제풀", "NCA 과정 문제풀"
+// ─────────────────────────────────────────
+model QuestionBank {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions BankQuestion[]
+  exams     Exam[]
+
+  @@map("question_banks")
+}
+
+// ─────────────────────────────────────────
+// BankQuestion — 문제은행 문제
+// ─────────────────────────────────────────
+model BankQuestion {
+  id             String   @id @default(cuid())
+  questionBankId String
+  content        String
+  order          Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  questionBank      QuestionBank       @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
+  choices           BankChoice[]
+  userExamQuestions UserExamQuestion[]
+  answers           Answer[]
+
+  @@index([questionBankId])
+  @@map("bank_questions")
+}
+
+// ─────────────────────────────────────────
+// BankChoice — 문제은행 문제 선택지
+// ─────────────────────────────────────────
+model BankChoice {
+  id             String  @id @default(cuid())
+  bankQuestionId String
+  content        String
+  isCorrect      Boolean @default(false)
+  order          Int
+
+  bankQuestion BankQuestion @relation(fields: [bankQuestionId], references: [id], onDelete: Cascade)
+  answers      Answer[]
+
+  @@index([bankQuestionId])
+  @@map("bank_choices")
+}
+
+// ─────────────────────────────────────────
+// UserExamQuestion — 사용자별 배정된 문제
+// 랜덤 추첨 후 고정 저장 (재응시 시 초기화)
+// ─────────────────────────────────────────
+model UserExamQuestion {
+  id             String   @id @default(cuid())
+  userId         String
+  examId         String
+  bankQuestionId String
+  assignedOrder  Int      // 이 사용자에게 표시될 문제 순서
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam         Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  bankQuestion BankQuestion @relation(fields: [bankQuestionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, examId, bankQuestionId])
+  @@index([userId, examId])
+  @@map("user_exam_questions")
+}
+
+// ─────────────────────────────────────────
 // User — 사용자 계정
 // ─────────────────────────────────────────
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  password    String
-  name        String
-  role        Role         @default(USER)
-  courseId    String?      // 소속 과정 (nullable)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(USER)
+  courseId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  submissions Submission[]
-  userExams   UserExam[]
+  course            Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  submissions       Submission[]
+  userExams         UserExam[]
+  userExamQuestions UserExamQuestion[]
 
   @@index([courseId])
   @@map("users")
@@ -55,28 +130,35 @@ model User {
 
 // ─────────────────────────────────────────
 // Exam — 시험지
+// questionBankId: 문제은행 연결 시 은행 기반 출제
+// questionCount:  문제은행에서 사용자별 추첨할 문제 수
 // ─────────────────────────────────────────
 model Exam {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  duration    Int
-  isPublished Boolean      @default(false)
-  courseId    String?      // 소속 과정 (nullable)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  duration       Int
+  isPublished    Boolean  @default(false)
+  courseId       String?
+  questionBankId String?  // 문제은행 연결 (null이면 수동 문제)
+  questionCount  Int?     // 사용자별 출제 문제 수 (문제은행 사용 시)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  questions   Question[]
-  submissions Submission[]
-  userExams   UserExam[]
+  course            Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  questionBank      QuestionBank?      @relation(fields: [questionBankId], references: [id], onDelete: SetNull)
+  questions         Question[]
+  submissions       Submission[]
+  userExams         UserExam[]
+  userExamQuestions UserExamQuestion[]
 
   @@index([courseId])
+  @@index([questionBankId])
   @@map("exams")
 }
 
 // ─────────────────────────────────────────
-// Question — 문제
+// Question — 수동 등록 문제 (기존 유지)
 // ─────────────────────────────────────────
 model Question {
   id        String   @id @default(cuid())
@@ -95,13 +177,13 @@ model Question {
 }
 
 // ─────────────────────────────────────────
-// Choice — 선택지
+// Choice — 수동 등록 선택지 (기존 유지)
 // ─────────────────────────────────────────
 model Choice {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   questionId String
   content    String
-  isCorrect  Boolean  @default(false)
+  isCorrect  Boolean @default(false)
   order      Int
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -133,8 +215,7 @@ model Submission {
 }
 
 // ─────────────────────────────────────────
-// UserExam — 시험-사용자 개별 매핑 (기존 유지)
-// Course 매핑과 별개로, 특정 사용자에게 개별 시험 할당 가능
+// UserExam — 개별 시험 직접 할당 (기존 유지)
 // ─────────────────────────────────────────
 model UserExam {
   id        String   @id @default(cuid())
@@ -153,17 +234,27 @@ model UserExam {
 
 // ─────────────────────────────────────────
 // Answer — 개별 답안
+// 수동 시험: questionId + choiceId 사용
+// 문제은행 시험: bankQuestionId + bankChoiceId 사용
 // ─────────────────────────────────────────
 model Answer {
-  id           String  @id @default(cuid())
-  submissionId String
-  questionId   String
-  choiceId     String
-  isCorrect    Boolean
+  id             String  @id @default(cuid())
+  submissionId   String
+  isCorrect      Boolean
 
-  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  question   Question   @relation(fields: [questionId], references: [id])
-  choice     Choice     @relation(fields: [choiceId], references: [id])
+  // 수동 문제 (기존)
+  questionId     String?
+  choiceId       String?
+
+  // 문제은행 문제 (신규)
+  bankQuestionId String?
+  bankChoiceId   String?
+
+  submission   Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question     Question?     @relation(fields: [questionId], references: [id])
+  choice       Choice?       @relation(fields: [choiceId], references: [id])
+  bankQuestion BankQuestion? @relation(fields: [bankQuestionId], references: [id])
+  bankChoice   BankChoice?   @relation(fields: [bankChoiceId], references: [id])
 
   @@index([submissionId])
   @@map("answers")

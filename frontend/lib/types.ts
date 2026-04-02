@@ -49,6 +49,10 @@ export interface ExamDetail {
   description: string | null;
   duration: number;
   isPublished: boolean;
+  questionBankId: string | null;
+  questionCount: number | null;
+  questionBank: { id: string; name: string } | null;
+  isBankBased: boolean;
   questions: Question[];
 }
 
@@ -98,6 +102,33 @@ export interface SubmissionDetail extends SubmissionSummary {
   }>;
 }
 
+// ─── Question Bank ───────────────────────────────────────────
+export interface BankChoiceSummary {
+  id: string;
+  content: string;
+  isCorrect: boolean;
+  order: number;
+}
+
+export interface BankQuestionSummary {
+  id: string;
+  content: string;
+  order: number;
+  choices: BankChoiceSummary[];
+}
+
+export interface QuestionBankSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  _count: { questions: number; exams: number };
+}
+
+export interface QuestionBankDetail extends QuestionBankSummary {
+  questions: BankQuestionSummary[];
+}
+
 // ─── Course ──────────────────────────────────────────────────
 export interface CourseSummary {
   id: string;
@@ -131,6 +162,9 @@ export interface AdminExam extends ExamSummary {
   isPublished: boolean;
   courseId: string | null;
   course: { id: string; name: string } | null;
+  questionBankId: string | null;
+  questionCount: number | null;
+  questionBank: { id: string; name: string; _count: { questions: number } } | null;
   _count: {
     questions: number;
     submissions: number;

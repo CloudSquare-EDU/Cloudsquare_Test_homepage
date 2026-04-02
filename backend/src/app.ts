@@ -9,6 +9,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import { authRoutes } from './routes/authRoutes';
 import { courseRoutes } from './routes/courseRoutes';
 import { examRoutes } from './routes/examRoutes';
+import { questionBankRoutes } from './routes/questionBankRoutes';
 import { questionRoutes } from './routes/questionRoutes';
 import { submissionRoutes } from './routes/submissionRoutes';
 import { userRoutes } from './routes/userRoutes';
@@ -38,6 +39,7 @@ export const createApp = (): express.Application => {
   app.use('/auth', authRoutes);
   app.use('/courses', courseRoutes);
   app.use('/exams', examRoutes);
+  app.use('/question-banks', questionBankRoutes);
   app.use('/questions', questionRoutes);
   app.use('/submissions', submissionRoutes);
   app.use('/users', userRoutes);
