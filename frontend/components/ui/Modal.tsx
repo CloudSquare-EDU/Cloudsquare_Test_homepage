@@ -45,11 +45,11 @@ export const Modal = ({
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onCancel}
       />
-      <div className="relative z-10 w-full max-w-sm rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#18181f] p-5 shadow-2xl">
-        <h2 className="mb-1.5 text-sm font-semibold text-[#ededf0]">{title}</h2>
-        <p className="mb-5 text-sm leading-relaxed text-[#9090aa]">{message}</p>
+      <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-5 shadow-2xl">
+        <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
+        <p className="mb-5 text-sm leading-relaxed text-[var(--text-secondary)]">{message}</p>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[#44445a]">Enter 확인 · Esc 취소</span>
+          <span className="text-xs text-[var(--text-faint)]">Enter 확인 · Esc 취소</span>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>
               {cancelLabel}

@@ -62,8 +62,8 @@ export default function AdminDashboard() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-[#ededf0]">대시보드</h1>
-        <p className="mt-0.5 text-sm text-[#55556a]">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">대시보드</h1>
+        <p className="mt-0.5 text-sm text-[var(--text-muted)]">
           안녕하세요, {user.name}님
         </p>
       </div>
@@ -71,18 +71,18 @@ export default function AdminDashboard() {
       <div className="grid gap-3 sm:grid-cols-3">
         {CARDS.map((card) => (
           <Link key={card.href} href={card.href}>
-            <div className="group flex h-full flex-col gap-3 rounded-xl border border-[rgba(255,255,255,0.07)] bg-[#18181f] p-5 transition-colors hover:border-[rgba(255,255,255,0.14)] hover:bg-[#1e1e28]">
+            <div className="group flex h-full flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-raised)]">
               <div className="flex items-center justify-between">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1e1e2e] text-[#5e6ad2] group-hover:bg-[#262648]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2] group-hover:bg-[#262648]">
                   {card.icon}
                 </div>
-                <kbd className="rounded border border-[rgba(255,255,255,0.07)] px-1.5 py-0.5 font-mono text-[10px] text-[#44445a]">
+                <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-faint)]">
                   {card.shortcut}
                 </kbd>
               </div>
               <div>
-                <h2 className="font-medium text-[#ededf0]">{card.title}</h2>
-                <p className="mt-0.5 text-xs text-[#55556a]">{card.description}</p>
+                <h2 className="font-medium text-[var(--text-primary)]">{card.title}</h2>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">{card.description}</p>
               </div>
             </div>
           </Link>

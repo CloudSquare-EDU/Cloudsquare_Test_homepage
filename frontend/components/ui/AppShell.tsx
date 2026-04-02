@@ -20,14 +20,14 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
 
   if (isBare(pathname)) {
     return (
-      <div className="min-h-screen bg-[#0f0f11]">
+      <div className="min-h-screen bg-[var(--bg)]">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0f0f11]">
+    <div className="flex h-screen overflow-hidden bg-[var(--bg)]">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-8 py-8">

@@ -77,8 +77,8 @@ export default function AdminExamsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#ededf0]">시험 관리</h1>
-          <p className="mt-0.5 text-sm text-[#55556a]">
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">시험 관리</h1>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             시험 생성 후 사용자 관리에서 개별 할당하세요
           </p>
         </div>
@@ -88,15 +88,15 @@ export default function AdminExamsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+        <div className="mb-4 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2.5 text-xs text-[var(--danger-text)]">
           {error}
         </div>
       )}
 
       {/* 시험 생성 폼 */}
       {showCreate && (
-        <form onSubmit={handleCreate} className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[#ededf0]">새 시험 생성</h2>
+        <form onSubmit={handleCreate} className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+          <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">새 시험 생성</h2>
           <div className="flex flex-col gap-3">
             <Input
               label="시험 제목"
@@ -113,12 +113,12 @@ export default function AdminExamsPage() {
               placeholder="시험에 대한 간단한 설명"
             />
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[#9090aa]">제한 시간</label>
+              <label className="text-xs font-medium text-[var(--text-secondary)]">제한 시간</label>
               <div className="flex items-center gap-2">
                 <select
                   value={form.duration}
                   onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}
-                  className="h-8 rounded-md border border-[rgba(255,255,255,0.09)] bg-[#18181f] px-2 text-sm text-[#ededf0] focus:outline-none focus:border-[#5e6ad2]"
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
                 >
                   <option value={1800}>30분</option>
                   <option value={3600}>60분</option>
@@ -126,12 +126,12 @@ export default function AdminExamsPage() {
                   <option value={7200}>120분</option>
                   <option value={0}>제한 없음</option>
                 </select>
-                <span className="text-xs text-[#44445a]">또는 직접 입력 (초)</span>
+                <span className="text-xs text-[var(--text-faint)]">또는 직접 입력 (초)</span>
                 <input
                   type="number"
                   value={form.duration}
                   onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}
-                  className="h-8 w-24 rounded-md border border-[rgba(255,255,255,0.09)] bg-[#18181f] px-2 text-sm text-[#ededf0] focus:outline-none focus:border-[#5e6ad2]"
+                  className="h-8 w-24 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
                   min={0}
                 />
               </div>
@@ -145,26 +145,26 @@ export default function AdminExamsPage() {
 
       {/* 시험 목록 */}
       {exams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
-          <p className="text-sm text-[#55556a]">등록된 시험이 없습니다</p>
-          <p className="mt-1 text-xs text-[#44445a]">위 버튼으로 시험을 생성하세요</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+          <p className="text-sm text-[var(--text-muted)]">등록된 시험이 없습니다</p>
+          <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 시험을 생성하세요</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {exams.map((exam) => (
             <div
               key={exam.id}
-              className="flex items-center gap-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] px-5 py-4 hover:border-[rgba(255,255,255,0.12)] transition-colors"
+              className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1e1e2e] text-[#5e6ad2]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
                 <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
                   <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[#ededf0] truncate">{exam.title}</p>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
+                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span>문제 {exam._count.questions}개</span>
                   <span>·</span>
                   <span>응시 {exam._count.submissions}회</span>

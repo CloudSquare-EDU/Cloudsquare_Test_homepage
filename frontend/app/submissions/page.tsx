@@ -8,17 +8,17 @@ import { SubmissionSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 
 const scoreColor = (score: number | null) => {
-  if (score === null) return 'text-[#55556a]';
-  if (score >= 80) return 'text-green-400';
-  if (score >= 60) return 'text-yellow-400';
-  return 'text-red-400';
+  if (score === null) return 'text-[var(--text-muted)]';
+  if (score >= 80) return 'text-[var(--success-text)]';
+  if (score >= 60) return 'text-[var(--warning-text)]';
+  return 'text-[var(--danger-text)]';
 };
 
 const scoreBg = (score: number | null) => {
-  if (score === null) return 'bg-[#1e1e28]';
-  if (score >= 80) return 'bg-[#0f2318]';
-  if (score >= 60) return 'bg-[#211800]';
-  return 'bg-[#250d0d]';
+  if (score === null) return 'bg-[var(--bg-raised)]';
+  if (score >= 80) return 'bg-[var(--success-bg)]';
+  if (score >= 60) return 'bg-[var(--warning-bg)]';
+  return 'bg-[var(--danger-bg)]';
 };
 
 export default function SubmissionsPage() {
@@ -41,8 +41,8 @@ export default function SubmissionsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#ededf0]">내 응시 기록</h1>
-          <p className="mt-0.5 text-sm text-[#55556a]">
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">내 응시 기록</h1>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             {submissions.length > 0 ? `총 ${submissions.length}회 응시` : '응시 기록이 없습니다'}
           </p>
         </div>
@@ -52,9 +52,9 @@ export default function SubmissionsPage() {
       </div>
 
       {submissions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-20 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-20 text-center">
           <div className="mb-3 text-3xl">📊</div>
-          <p className="text-sm text-[#55556a]">아직 응시한 시험이 없습니다</p>
+          <p className="text-sm text-[var(--text-muted)]">아직 응시한 시험이 없습니다</p>
           <Link href="/" className="mt-4">
             <Button size="sm">시험 목록으로</Button>
           </Link>
@@ -64,7 +64,7 @@ export default function SubmissionsPage() {
           {submissions.map((s) => (
             <div
               key={s.id}
-              className="flex items-center gap-4 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#18181f] px-5 py-4 hover:border-[rgba(255,255,255,0.14)] hover:bg-[#1e1e28] transition-colors"
+              className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] hover:bg-[var(--bg-raised)] transition-colors"
             >
               {/* 점수 */}
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${scoreBg(s.score)} ${scoreColor(s.score)}`}>
@@ -73,8 +73,8 @@ export default function SubmissionsPage() {
 
               {/* 시험 정보 */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[#ededf0] truncate">{s.exam.title}</p>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                <p className="font-medium text-[var(--text-primary)] truncate">{s.exam.title}</p>
+                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span>{s.totalQuestions}문제</span>
                   <span>·</span>
                   <span>{new Date(s.submittedAt).toLocaleString('ko-KR', {

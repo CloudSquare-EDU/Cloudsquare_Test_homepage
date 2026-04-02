@@ -233,17 +233,17 @@ export default function AdminQuestionsPage() {
   return (
     <div>
       {/* 브레드크럼 */}
-      <div className="mb-3 flex items-center gap-1.5 text-xs text-[#44445a]">
-        <Link href="/admin/exams" className="hover:text-[#9090aa] transition-colors">시험 관리</Link>
+      <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
+        <Link href="/admin/exams" className="hover:text-[var(--text-secondary)] transition-colors">시험 관리</Link>
         <span>›</span>
-        <span className="text-[#9090aa]">{exam?.title}</span>
+        <span className="text-[var(--text-secondary)]">{exam?.title}</span>
       </div>
 
       {/* 헤더 */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#ededf0]">문제 관리</h1>
-          <p className="mt-0.5 text-sm text-[#55556a]">총 {exam?.questions?.length ?? 0}개 문제</p>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">문제 관리</h1>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">총 {exam?.questions?.length ?? 0}개 문제</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -263,38 +263,38 @@ export default function AdminQuestionsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+        <div className="mb-4 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2.5 text-xs text-[var(--danger-text)]">
           {error}
         </div>
       )}
       {successMsg && (
-        <div className="mb-4 rounded-md border border-[rgba(74,222,128,0.15)] bg-[#0f2318] px-3 py-2.5 text-xs font-medium text-green-400">
+        <div className="mb-4 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-2.5 text-xs font-medium text-[var(--success-text)]">
           {successMsg}
         </div>
       )}
 
       {/* ── 엑셀 업로드 패널 ── */}
       {panelMode === 'excel' && (
-        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
-          <h2 className="mb-1 text-sm font-semibold text-[#ededf0]">엑셀 일괄 업로드</h2>
-          <p className="mb-4 text-xs text-[#55556a]">
+        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+          <h2 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 업로드</h2>
+          <p className="mb-4 text-xs text-[var(--text-muted)]">
             아래 컬럼 형식의 .xlsx 파일을 업로드하면 문제가 자동 등록됩니다.
             <span className="ml-2 text-[#5e6ad2]">복수 정답은 쉼표로 구분 (예: 1,3)</span>
           </p>
 
           {/* 컬럼 형식 안내 */}
-          <div className="mb-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a] p-3">
-            <p className="mb-2 text-xs font-medium text-[#9090aa]">엑셀 컬럼 형식</p>
+          <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-3">
+            <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">엑셀 컬럼 형식</p>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-[#55556a]">
+              <table className="w-full text-xs text-[var(--text-muted)]">
                 <thead>
-                  <tr className="border-b border-[rgba(255,255,255,0.06)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     {['문제번호', '문제내용', '선택지1', '선택지2', '선택지3', '선택지4', '정답번호(1~4)'].map((h) => (
-                      <th key={h} className="pb-1.5 pr-3 text-left font-medium text-[#9090aa] whitespace-nowrap">{h}</th>
+                      <th key={h} className="pb-1.5 pr-3 text-left font-medium text-[var(--text-secondary)] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="text-[#44445a]">
+                <tbody className="text-[var(--text-faint)]">
                   <tr>
                     <td className="pt-1.5 pr-3">1</td>
                     <td className="pt-1.5 pr-3">파이썬 리스트 정의 방법은?</td>
@@ -324,29 +324,29 @@ export default function AdminQuestionsPage() {
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileChange}
-              className="block text-xs text-[#55556a] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
+              className="block text-xs text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
             />
           </div>
 
           {excelError && (
-            <div className="mb-3 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2 text-xs text-[#f87171]">
+            <div className="mb-3 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]">
               {excelError}
             </div>
           )}
 
           {excelPreview.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium text-[#9090aa]">미리보기 ({excelPreview.length}개 문제)</p>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a]">
+              <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">미리보기 ({excelPreview.length}개 문제)</p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
                 {excelPreview.map((row, idx) => {
                   const ansStr = row['정답번호(1~4)']?.toString() ?? '';
                   return (
-                    <div key={idx} className="border-b border-[rgba(255,255,255,0.05)] px-4 py-2.5 last:border-0">
-                      <p className="text-xs font-medium text-[#ededf0]">
+                    <div key={idx} className="border-b border-[var(--border-subtle)] px-4 py-2.5 last:border-0">
+                      <p className="text-xs font-medium text-[var(--text-primary)]">
                         <span className="mr-2 text-[#5e6ad2]">Q{idx + 1}.</span>
                         {row['문제내용']}
                       </p>
-                      <p className="mt-1 text-[11px] text-[#44445a]">
+                      <p className="mt-1 text-[11px] text-[var(--text-faint)]">
                         ① {row['선택지1']} &nbsp;② {row['선택지2']} &nbsp;③ {row['선택지3']} &nbsp;④ {row['선택지4']}
                         <span className="ml-2 text-green-500 font-medium">정답: {ansStr}번</span>
                       </p>
@@ -366,17 +366,17 @@ export default function AdminQuestionsPage() {
 
       {/* ── 문제 일괄 추가 패널 ── */}
       {panelMode === 'add' && (
-        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
+        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#ededf0]">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               문제 추가
-              <span className="ml-2 text-xs font-normal text-[#55556a]">{questionForms.length}개 작성 중</span>
+              <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{questionForms.length}개 작성 중</span>
             </h2>
           </div>
 
           <div className="flex flex-col gap-4">
             {questionForms.map((qForm, qi) => (
-              <div key={qi} className="rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a] p-4">
+              <div key={qi} className="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-4">
                 {/* 문제 헤더 */}
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-xs font-semibold text-[#5e6ad2]">Q{qi + 1}</span>
@@ -384,7 +384,7 @@ export default function AdminQuestionsPage() {
                     <button
                       type="button"
                       onClick={() => removeQuestionCard(qi)}
-                      className="text-xs text-[#44445a] hover:text-[#f87171] transition-colors"
+                      className="text-xs text-[var(--text-faint)] hover:text-[var(--danger-text)] transition-colors"
                     >
                       ✕ 삭제
                     </button>
@@ -402,7 +402,7 @@ export default function AdminQuestionsPage() {
                 </div>
 
                 {/* 선택지 */}
-                <p className="mb-2 text-xs text-[#55556a]">
+                <p className="mb-2 text-xs text-[var(--text-muted)]">
                   선택지 및 정답
                   <span className="ml-1 text-[#5e6ad2]">(체크박스로 복수 정답 선택 가능)</span>
                 </p>
@@ -415,7 +415,7 @@ export default function AdminQuestionsPage() {
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
                           choice.isCorrect
                             ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white'
-                            : 'border-[rgba(255,255,255,0.15)] bg-transparent'
+                            : 'border-[var(--border-hover)] bg-transparent'
                         }`}
                         title="정답으로 선택"
                       >
@@ -430,10 +430,10 @@ export default function AdminQuestionsPage() {
                         value={choice.content}
                         onChange={(e) => updateChoice(qi, ci, e.target.value)}
                         placeholder={`선택지 ${ci + 1}`}
-                        className={`flex-1 rounded-md border bg-[#18181f] px-3 py-1.5 text-sm text-[#ededf0] placeholder-[#44445a] focus:outline-none transition-colors ${
+                        className={`flex-1 rounded-md border bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] focus:outline-none transition-colors ${
                           choice.isCorrect
                             ? 'border-[rgba(94,106,210,0.5)]'
-                            : 'border-[rgba(255,255,255,0.09)] focus:border-[#5e6ad2]'
+                            : 'border-[var(--border)] focus:border-[#5e6ad2]'
                         }`}
                       />
                       {choice.isCorrect && (
@@ -459,35 +459,35 @@ export default function AdminQuestionsPage() {
 
       {/* ── 문제 목록 ── */}
       {!exam?.questions?.length ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
-          <p className="text-sm text-[#55556a]">등록된 문제가 없습니다</p>
-          <p className="mt-1 text-xs text-[#44445a]">위 버튼으로 문제를 추가하세요</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+          <p className="text-sm text-[var(--text-muted)]">등록된 문제가 없습니다</p>
+          <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 문제를 추가하세요</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {exam.questions.map((q: Question, idx) => (
             <div
               key={q.id}
-              className="rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] px-5 py-4 hover:border-[rgba(255,255,255,0.12)] transition-colors"
+              className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
             >
               <div className="flex items-start gap-4">
                 {/* 문제 번호 배지 */}
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[#1e1e2e] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--bg-raised)] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
                   {idx + 1}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-medium text-[#ededf0]">{q.content}</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{q.content}</p>
                     {q.answerCount > 1 && (
-                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#1e1e2e] text-[#5e6ad2]">
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[#5e6ad2]">
                         복수 {q.answerCount}개
                       </span>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {q.choices.map((c) => (
-                      <p key={c.id} className="text-xs text-[#44445a]">
+                      <p key={c.id} className="text-xs text-[var(--text-faint)]">
                         {c.order}. {c.content}
                       </p>
                     ))}

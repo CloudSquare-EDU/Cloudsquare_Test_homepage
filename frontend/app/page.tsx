@@ -57,7 +57,7 @@ export default function HomePage() {
 
   if (error) {
     return (
-      <div className="rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] p-3 text-sm text-[#f87171]">
+      <div className="rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] p-3 text-sm text-[var(--danger-text)]">
         {error}
       </div>
     );
@@ -68,8 +68,8 @@ export default function HomePage() {
       {/* 페이지 헤더 */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#ededf0]">시험 목록</h1>
-          <p className="mt-0.5 text-sm text-[#55556a]">
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">시험 목록</h1>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             {exams.length > 0 ? `${exams.length}개의 시험이 할당되었습니다` : '할당된 시험이 없습니다'}
           </p>
         </div>
@@ -85,10 +85,10 @@ export default function HomePage() {
       </div>
 
       {exams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-20 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-20 text-center">
           <div className="mb-3 text-3xl">📋</div>
-          <p className="text-sm text-[#55556a]">아직 할당된 시험이 없습니다</p>
-          <p className="mt-1 text-xs text-[#44445a]">관리자에게 시험 할당을 요청하세요</p>
+          <p className="text-sm text-[var(--text-muted)]">아직 할당된 시험이 없습니다</p>
+          <p className="mt-1 text-xs text-[var(--text-faint)]">관리자에게 시험 할당을 요청하세요</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -102,25 +102,25 @@ export default function HomePage() {
                 className={`
                   flex items-center gap-4 rounded-lg border px-5 py-4 transition-colors
                   ${done
-                    ? 'border-[rgba(255,255,255,0.06)] bg-[#18181f]'
-                    : 'border-[rgba(255,255,255,0.08)] bg-[#18181f] hover:border-[rgba(255,255,255,0.14)] hover:bg-[#1e1e28]'
+                    ? 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
+                    : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-raised)]'
                   }
                 `}
               >
                 {/* 상태 아이콘 */}
                 <div className={`
                   flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm
-                  ${done ? 'bg-[#0f2318] text-green-400' : 'bg-[#1e1e28] text-[#9090aa]'}
+                  ${done ? 'bg-[var(--success-bg)] text-[var(--success-text)]' : 'bg-[var(--bg-raised)] text-[var(--text-secondary)]'}
                 `}>
                   {done ? '✓' : '📝'}
                 </div>
 
                 {/* 시험 정보 */}
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium truncate ${done ? 'text-[#9090aa]' : 'text-[#ededf0]'}`}>
+                  <p className={`font-medium truncate ${done ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
                     {exam.title}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                  <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                     <span>{exam.questionCount}문제</span>
                     <span>⏱ {formatDuration(exam.duration)}</span>
                     {done && (
@@ -137,9 +137,9 @@ export default function HomePage() {
                     <>
                       <span className={`
                         rounded-md px-2.5 py-1 text-sm font-bold
-                        ${(submission.score ?? 0) >= 80 ? 'bg-[#0f2318] text-green-400' :
-                          (submission.score ?? 0) >= 60 ? 'bg-[#211800] text-yellow-400' :
-                          'bg-[#250d0d] text-red-400'}
+                        ${(submission.score ?? 0) >= 80 ? 'bg-[var(--success-bg)] text-[var(--success-text)]' :
+                          (submission.score ?? 0) >= 60 ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]' :
+                          'bg-[var(--danger-bg)] text-[var(--danger-text)]'}
                       `}>
                         {submission.score}점
                       </span>

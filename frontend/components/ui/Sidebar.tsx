@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useTheme } from '@/components/ui/ThemeProvider';
 
 // ─── Icons ───────────────────────────────────────────────────
 
@@ -120,10 +121,10 @@ const CommandPalette = ({ isOpen, onClose, navItems, onLogout }: CommandPaletteP
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-[rgba(255,255,255,0.12)] bg-[#18181f] shadow-2xl">
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] shadow-2xl">
         {/* 검색 */}
-        <div className="flex items-center gap-3 border-b border-[rgba(255,255,255,0.07)] px-4 py-3">
-          <svg className="h-4 w-4 shrink-0 text-[#55556a]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
+          <svg className="h-4 w-4 shrink-0 text-[var(--text-muted)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="7" cy="7" r="4.5" />
             <path d="M11 11l3 3" strokeLinecap="round" />
           </svg>
@@ -132,32 +133,32 @@ const CommandPalette = ({ isOpen, onClose, navItems, onLogout }: CommandPaletteP
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이동할 페이지 검색..."
-            className="flex-1 bg-transparent text-sm text-[#ededf0] placeholder:text-[#44445a] focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-faint)] focus:outline-none"
           />
-          <kbd className="rounded border border-[rgba(255,255,255,0.1)] px-1.5 py-0.5 text-[10px] text-[#55556a]">Esc</kbd>
+          <kbd className="rounded border border-[var(--border-hover)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">Esc</kbd>
         </div>
 
         {/* 메뉴 목록 */}
         <div className="py-1.5">
           {filtered.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-[#55556a]">검색 결과 없음</p>
+            <p className="px-4 py-3 text-sm text-[var(--text-muted)]">검색 결과 없음</p>
           ) : (
             filtered.map((item) => (
               <button
                 key={item.href}
                 onClick={() => navigate(item.href)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#9090aa] hover:bg-[#1e1e28] hover:text-[#ededf0] transition-colors"
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
               >
-                <span className="text-[#55556a]">{item.icon}</span>
+                <span className="text-[var(--text-muted)]">{item.icon}</span>
                 {item.label}
-                <span className="ml-auto font-mono text-xs text-[#44445a]">G {item.shortcutKey.toUpperCase()}</span>
+                <span className="ml-auto font-mono text-xs text-[var(--text-faint)]">G {item.shortcutKey.toUpperCase()}</span>
               </button>
             ))
           )}
-          <div className="mx-3 my-1.5 border-t border-[rgba(255,255,255,0.06)]" />
+          <div className="mx-3 my-1.5 border-t border-[var(--border-subtle)]" />
           <button
             onClick={() => { onLogout(); onClose(); }}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[#9090aa] hover:bg-[#250d0d] hover:text-[#f87171] transition-colors"
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger-text)] transition-colors"
           >
             <IcLogout />
             로그아웃
@@ -229,25 +230,27 @@ export const Sidebar = () => {
     };
   }, [gPending, navItems, router]);
 
+  const { theme, toggle: toggleTheme } = useTheme();
+
   if (!user) return null;
 
   const initials = user.name.charAt(0).toUpperCase();
 
   return (
     <>
-      <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-[rgba(255,255,255,0.06)] bg-[#111117]">
+      <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--sidebar-bg)]">
         {/* Logo + Cmd+K */}
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded bg-[#5e6ad2] text-xs font-bold text-white">
               M
             </div>
-            <span className="text-sm font-semibold text-[#ededf0]">MockExam</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">모의시험사이트</span>
           </div>
           <button
             onClick={() => setShowPalette(true)}
             title="커맨드 팔레트 (Cmd+K)"
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-[#44445a] hover:bg-[#1a1a24] hover:text-[#9090aa] transition-colors"
+            className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-secondary)] transition-colors"
           >
             <kbd className="font-mono">⌘K</kbd>
           </button>
@@ -262,7 +265,7 @@ export const Sidebar = () => {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-1">
-          <div className="mb-1 px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-[#44445a]">
+          <div className="mb-1 px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-[var(--text-faint)]">
             {user.role === 'ADMIN' ? '관리' : '메뉴'}
           </div>
           {navItems.map((item) => {
@@ -274,16 +277,16 @@ export const Sidebar = () => {
                 className={`
                   group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors
                   ${active
-                    ? 'bg-[#1e1e2e] text-[#ededf0]'
-                    : 'text-[#8888a8] hover:bg-[#18181f] hover:text-[#ededf0]'
+                    ? 'bg-[var(--bg-raised)] text-[var(--text-primary)]'
+                    : 'text-[#8888a8] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]'
                   }
                 `}
               >
-                <span className={active ? 'text-[#5e6ad2]' : 'text-[#55556a] group-hover:text-[#8888a8]'}>
+                <span className={active ? 'text-[#5e6ad2]' : 'text-[var(--text-muted)] group-hover:text-[#8888a8]'}>
                   {item.icon}
                 </span>
                 <span className="flex-1">{item.label}</span>
-                <span className="font-mono text-[10px] text-[#2e2e42] group-hover:text-[#44445a]">
+                <span className="font-mono text-[10px] text-[var(--border-hover)] group-hover:text-[var(--text-faint)]">
                   G {item.shortcutKey.toUpperCase()}
                 </span>
               </Link>
@@ -291,22 +294,41 @@ export const Sidebar = () => {
           })}
         </nav>
 
-        {/* User info + logout */}
-        <div className="border-t border-[rgba(255,255,255,0.06)] px-3 py-3">
+        {/* User info + controls */}
+        <div className="border-t border-[var(--border-subtle)] px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2a2a3e] text-xs font-semibold text-[#9090aa]">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[var(--text-secondary)]">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-xs font-medium text-[#ededf0]">{user.name}</p>
-              <p className="text-[10px] text-[#55556a]">
+              <p className="truncate text-xs font-medium text-[var(--text-primary)]">{user.name}</p>
+              <p className="text-[10px] text-[var(--text-muted)]">
                 {user.role === 'ADMIN' ? '관리자' : '일반 사용자'}
               </p>
             </div>
+            {/* 다크/라이트 토글 */}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+              className="shrink-0 rounded p-1 text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              {theme === 'dark' ? (
+                /* Sun icon */
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8" cy="8" r="3" />
+                  <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.22 3.22l1.42 1.42M11.36 11.36l1.42 1.42M3.22 12.78l1.42-1.42M11.36 4.64l1.42-1.42" strokeLinecap="round" />
+                </svg>
+              ) : (
+                /* Moon icon */
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M13.5 10.5A6 6 0 015.5 2.5a6 6 0 100 11 6 6 0 008-3z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
             <button
               onClick={handleLogout}
               title="로그아웃"
-              className="shrink-0 rounded p-1 text-[#44445a] hover:bg-[#250d0d] hover:text-[#f87171] transition-colors"
+              className="shrink-0 rounded p-1 text-[var(--text-faint)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger-text)] transition-colors"
             >
               <IcLogout />
             </button>

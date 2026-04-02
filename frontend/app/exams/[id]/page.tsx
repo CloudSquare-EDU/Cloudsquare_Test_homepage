@@ -139,7 +139,7 @@ export default function ExamPage() {
   // ── Loading ──
   if (phase === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
       </div>
     );
@@ -148,8 +148,8 @@ export default function ExamPage() {
   // ── Error ──
   if (phase === 'error' || !exam) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
-        <div className="rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] p-4 text-sm text-[#f87171]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] p-4">
+        <div className="rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] p-4 text-sm text-[var(--danger-text)]">
           시험을 불러오는 데 실패했습니다.{' '}
           <Link href="/" className="underline">돌아가기</Link>
         </div>
@@ -160,17 +160,17 @@ export default function ExamPage() {
   // ── Already done ──
   if (phase === 'already-done' && existingSubmission) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
-        <div className="w-full max-w-sm rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f] p-6 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#0f2318] text-2xl">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] p-4">
+        <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--success-bg)] text-2xl">
             ✓
           </div>
-          <h2 className="text-base font-semibold text-[#ededf0]">이미 응시한 시험입니다</h2>
-          <p className="mt-1 text-sm text-[#55556a]">{exam.title}</p>
-          <p className="mt-1 text-xs text-[#44445a]">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">이미 응시한 시험입니다</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{exam.title}</p>
+          <p className="mt-1 text-xs text-[var(--text-faint)]">
             {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')} 응시
           </p>
-          <p className="mt-4 text-3xl font-black text-green-400">{existingSubmission.score}<span className="text-base font-normal text-[#55556a]">점</span></p>
+          <p className="mt-4 text-3xl font-black text-[var(--success-text)]">{existingSubmission.score}<span className="text-base font-normal text-[var(--text-muted)]">점</span></p>
           <div className="mt-5 flex flex-col gap-2">
             <Link href={`/submissions/${existingSubmission.id}`}>
               <Button className="w-full">결과 상세 보기</Button>
@@ -179,7 +179,7 @@ export default function ExamPage() {
               <Button variant="ghost" className="w-full">시험 목록으로</Button>
             </Link>
           </div>
-          <p className="mt-3 text-xs text-[#44445a]">재응시는 관리자에게 문의하세요</p>
+          <p className="mt-3 text-xs text-[var(--text-faint)]">재응시는 관리자에게 문의하세요</p>
         </div>
       </div>
     );
@@ -189,29 +189,29 @@ export default function ExamPage() {
   if (phase === 'intro') {
     const hasDraft = Object.keys(answers).length > 0;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] p-4">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] p-4">
         <div className="w-full max-w-md">
           {/* 헤더 */}
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1e1e28] text-2xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--bg-raised)] text-2xl">
               📝
             </div>
-            <h1 className="text-xl font-semibold text-[#ededf0]">{exam.title}</h1>
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">{exam.title}</h1>
             {exam.description && (
-              <p className="mt-2 text-sm text-[#9090aa]">{exam.description}</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">{exam.description}</p>
             )}
           </div>
 
           {/* 시험 정보 */}
-          <div className="mb-5 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f]">
-            <div className="grid grid-cols-2 divide-x divide-[rgba(255,255,255,0.06)]">
+          <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+            <div className="grid grid-cols-2 divide-x divide-[var(--border-subtle)]">
               <div className="px-5 py-4 text-center">
-                <p className="text-2xl font-bold text-[#ededf0]">{totalCount}</p>
-                <p className="mt-0.5 text-xs text-[#55556a]">문제 수</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{totalCount}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">문제 수</p>
               </div>
               <div className="px-5 py-4 text-center">
-                <p className="text-2xl font-bold text-[#ededf0]">{formatDuration(exam.duration)}</p>
-                <p className="mt-0.5 text-xs text-[#55556a]">제한 시간</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{formatDuration(exam.duration)}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">제한 시간</p>
               </div>
             </div>
           </div>
@@ -227,7 +227,7 @@ export default function ExamPage() {
           )}
 
           {/* 주의사항 */}
-          <div className="mb-5 text-xs text-[#44445a] space-y-1">
+          <div className="mb-5 text-xs text-[var(--text-faint)] space-y-1">
             <p>• 시험 중 페이지를 나가면 답안이 임시 저장됩니다</p>
             <p>• 제출 후에는 수정이 불가합니다</p>
             {exam.duration > 0 && <p>• 시간 초과 시 자동 제출됩니다</p>}
@@ -250,25 +250,25 @@ export default function ExamPage() {
 
   // ── In Progress ──
   return (
-    <div className="min-h-screen bg-[#0f0f11] pb-24">
+    <div className="min-h-screen bg-[var(--bg)] pb-24">
       {/* 상단 고정 헤더 */}
-      <div className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.07)] bg-[#111117]/90 backdrop-blur-sm">
+      <div className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--sidebar-bg)]/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
           <div>
-            <h1 className="text-sm font-semibold text-[#ededf0]">{exam.title}</h1>
-            <p className="text-xs text-[#55556a]">{answeredCount} / {totalCount} 응답</p>
+            <h1 className="text-sm font-semibold text-[var(--text-primary)]">{exam.title}</h1>
+            <p className="text-xs text-[var(--text-muted)]">{answeredCount} / {totalCount} 응답</p>
           </div>
           <div className="flex items-center gap-3">
             {exam.duration > 0 && <Timer formattedTime={formattedTime} isWarning={isWarning} />}
             {/* 진행률 바 */}
             <div className="hidden sm:flex items-center gap-2">
-              <div className="h-1.5 w-24 rounded-full bg-[#1e1e28]">
+              <div className="h-1.5 w-24 rounded-full bg-[var(--bg-raised)]">
                 <div
                   className="h-full rounded-full bg-[#5e6ad2] transition-all"
                   style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
                 />
               </div>
-              <span className="text-xs text-[#55556a]">{totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%</span>
+              <span className="text-xs text-[var(--text-muted)]">{totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%</span>
             </div>
           </div>
         </div>
@@ -283,18 +283,18 @@ export default function ExamPage() {
           return (
             <div
               key={question.id}
-              className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f] p-5"
+              className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5"
             >
               <div className="mb-3 flex items-start gap-2.5">
-                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold bg-[#1e1e2e] text-[#5e6ad2]">
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold bg-[var(--bg-raised)] text-[#5e6ad2]">
                   Q{idx + 1}
                 </span>
                 {isMulti && (
-                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[#1e1e2e] text-[#8090d8]">
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[#8090d8]">
                     복수 정답 {question.answerCount}개
                   </span>
                 )}
-                <p className="text-sm font-medium text-[#ededf0] leading-relaxed">
+                <p className="text-sm font-medium text-[var(--text-primary)] leading-relaxed">
                   {question.content}
                 </p>
               </div>
@@ -310,8 +310,8 @@ export default function ExamPage() {
                         className={`
                           flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors
                           ${isSelected
-                            ? 'border-[#5e6ad2] bg-[#1e2245] text-[#ededf0]'
-                            : 'border-[rgba(255,255,255,0.07)] bg-[#111117] text-[#9090aa] hover:border-[rgba(255,255,255,0.14)] hover:text-[#ededf0]'
+                            ? 'border-[#5e6ad2] bg-[#1e2245] text-[var(--text-primary)]'
+                            : 'border-[var(--border)] bg-[var(--sidebar-bg)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
                           }
                         `}
                       >
@@ -321,7 +321,7 @@ export default function ExamPage() {
                           onChange={() => handleMultiToggle(question.id, choice.id)}
                           className="h-4 w-4 rounded accent-[#5e6ad2]"
                         />
-                        <span className={`shrink-0 text-xs font-mono ${isSelected ? 'text-[#5e6ad2]' : 'text-[#44445a]'}`}>
+                        <span className={`shrink-0 text-xs font-mono ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-faint)]'}`}>
                           {choice.order}.
                         </span>
                         {choice.content}
@@ -336,14 +336,14 @@ export default function ExamPage() {
                       className={`
                         flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm transition-colors
                         ${isSelected
-                          ? 'border-[#5e6ad2] bg-[#1e2245] text-[#ededf0]'
-                          : 'border-[rgba(255,255,255,0.07)] bg-[#111117] text-[#9090aa] hover:border-[rgba(255,255,255,0.14)] hover:text-[#ededf0]'
+                          ? 'border-[#5e6ad2] bg-[#1e2245] text-[var(--text-primary)]'
+                          : 'border-[var(--border)] bg-[var(--sidebar-bg)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
                         }
                       `}
                     >
                       <span className={`
                         flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-mono
-                        ${isSelected ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[#2e2e42] text-[#44445a]'}
+                        ${isSelected ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[#2e2e42] text-[var(--text-faint)]'}
                       `}>
                         {choice.order}
                       </span>
@@ -358,12 +358,12 @@ export default function ExamPage() {
       </div>
 
       {/* 하단 고정 제출 바 */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-[rgba(255,255,255,0.07)] bg-[#111117]/90 backdrop-blur-sm px-5 py-4">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)] bg-[var(--sidebar-bg)]/90 backdrop-blur-sm px-5 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           {errorMsg ? (
-            <p className="text-xs text-[#f87171]">{errorMsg}</p>
+            <p className="text-xs text-[var(--danger-text)]">{errorMsg}</p>
           ) : (
-            <p className="text-xs text-[#55556a]">
+            <p className="text-xs text-[var(--text-muted)]">
               {answeredCount < totalCount
                 ? `${totalCount - answeredCount}개 문제가 미응답입니다`
                 : '모든 문제에 답했습니다'}

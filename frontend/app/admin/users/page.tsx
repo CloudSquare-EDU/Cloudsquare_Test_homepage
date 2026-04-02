@@ -212,8 +212,8 @@ export default function AdminUsersPage() {
       {/* 헤더 */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[#ededf0]">사용자 관리</h1>
-          <p className="mt-0.5 text-sm text-[#55556a]">계정 생성 및 시험 할당을 관리하세요</p>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">사용자 관리</h1>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">계정 생성 및 시험 할당을 관리하세요</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -233,25 +233,25 @@ export default function AdminUsersPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+        <div className="mb-4 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2.5 text-xs text-[var(--danger-text)]">
           {error}
         </div>
       )}
 
       {/* ── 개별 계정 생성 폼 ── */}
       {createMode === 'single' && (
-        <form onSubmit={handleCreate} className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[#ededf0]">새 계정 생성</h2>
+        <form onSubmit={handleCreate} className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+          <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">새 계정 생성</h2>
           <div className="flex flex-col gap-3">
             <Input label="이름" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} placeholder="홍길동" required autoFocus />
             <Input label="이메일" type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} placeholder="user@example.com" required />
             <Input label="비밀번호" type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="8자 이상" required />
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[#9090aa]">권한</label>
+              <label className="text-xs font-medium text-[var(--text-secondary)]">권한</label>
               <select
                 value={createForm.role}
                 onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as 'USER' | 'ADMIN' })}
-                className="h-8 rounded-md border border-[rgba(255,255,255,0.09)] bg-[#18181f] px-2 text-sm text-[#ededf0] focus:outline-none focus:border-[#5e6ad2]"
+                className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
               >
                 <option value="USER">일반 사용자</option>
                 <option value="ADMIN">관리자</option>
@@ -266,21 +266,21 @@ export default function AdminUsersPage() {
 
       {/* ── 엑셀 일괄 생성 섹션 ── */}
       {createMode === 'excel' && (
-        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[#18181f] p-5">
-          <h2 className="mb-1 text-sm font-semibold text-[#ededf0]">엑셀 일괄 계정 생성</h2>
-          <p className="mb-4 text-xs text-[#55556a]">
+        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+          <h2 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 계정 생성</h2>
+          <p className="mb-4 text-xs text-[var(--text-muted)]">
             샘플 파일 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 계정이 자동으로 생성됩니다.
           </p>
 
           {/* 컬럼 형식 안내 */}
-          <div className="mb-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a] p-3 text-xs">
-            <p className="mb-2 font-medium text-[#9090aa]">엑셀 컬럼 형식</p>
+          <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-3 text-xs">
+            <p className="mb-2 font-medium text-[var(--text-secondary)]">엑셀 컬럼 형식</p>
             <div className="overflow-x-auto">
-              <table className="w-full text-[#55556a]">
+              <table className="w-full text-[var(--text-muted)]">
                 <thead>
-                  <tr className="border-b border-[rgba(255,255,255,0.06)]">
+                  <tr className="border-b border-[var(--border-subtle)]">
                     {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)'].map((h) => (
-                      <th key={h} className="pb-1.5 pr-4 text-left font-medium text-[#9090aa]">{h}</th>
+                      <th key={h} className="pb-1.5 pr-4 text-left font-medium text-[var(--text-secondary)]">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -302,24 +302,24 @@ export default function AdminUsersPage() {
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileChange}
-              className="block text-xs text-[#55556a] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
+              className="block text-xs text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
             />
           </div>
 
           {excelError && (
-            <div className="mb-3 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2 text-xs text-[#f87171]">
+            <div className="mb-3 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]">
               {excelError}
             </div>
           )}
 
           {uploadResult && (
-            <div className="mb-3 rounded-md border border-[rgba(74,222,128,0.15)] bg-[#0f2318] px-3 py-2 text-xs">
-              <p className="font-medium text-green-400">{uploadResult.success}명 생성 완료</p>
+            <div className="mb-3 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-2 text-xs">
+              <p className="font-medium text-[var(--success-text)]">{uploadResult.success}명 생성 완료</p>
               {uploadResult.failed.length > 0 && (
                 <div className="mt-1.5">
-                  <p className="text-[#f87171]">{uploadResult.failed.length}명 실패:</p>
+                  <p className="text-[var(--danger-text)]">{uploadResult.failed.length}명 실패:</p>
                   {uploadResult.failed.map((f, i) => (
-                    <p key={i} className="ml-2 text-[#f87171]">• {f.email}: {f.reason}</p>
+                    <p key={i} className="ml-2 text-[var(--danger-text)]">• {f.email}: {f.reason}</p>
                   ))}
                 </div>
               )}
@@ -328,18 +328,18 @@ export default function AdminUsersPage() {
 
           {excelPreview.length > 0 && (
             <div className="mb-3">
-              <p className="mb-2 text-xs font-medium text-[#9090aa]">미리보기 ({excelPreview.length}명)</p>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#13131a]">
+              <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">미리보기 ({excelPreview.length}명)</p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
                 {excelPreview.map((row, idx) => {
                   const role = row['권한(USER/ADMIN)']?.toString().toUpperCase();
                   return (
-                    <div key={idx} className="flex items-center justify-between border-b border-[rgba(255,255,255,0.05)] px-4 py-2 text-xs last:border-0">
+                    <div key={idx} className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2 text-xs last:border-0">
                       <div>
-                        <span className="font-medium text-[#ededf0]">{row['이름']}</span>
-                        <span className="ml-2 text-[#55556a]">{row['이메일']}</span>
+                        <span className="font-medium text-[var(--text-primary)]">{row['이름']}</span>
+                        <span className="ml-2 text-[var(--text-muted)]">{row['이메일']}</span>
                       </div>
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                        role === 'ADMIN' ? 'bg-[#1e1e2e] text-[#5e6ad2]' : 'bg-[#1a1a22] text-[#55556a]'
+                        role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
                       }`}>
                         {role === 'ADMIN' ? '관리자' : '일반'}
                       </span>
@@ -359,32 +359,32 @@ export default function AdminUsersPage() {
 
       {/* ── 사용자 목록 ── */}
       {users.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
-          <p className="text-sm text-[#55556a]">등록된 사용자가 없습니다</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+          <p className="text-sm text-[var(--text-muted)]">등록된 사용자가 없습니다</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user) => (
             <div
               key={user.id}
-              className="flex items-center gap-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] px-5 py-4 hover:border-[rgba(255,255,255,0.12)] transition-colors"
+              className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
             >
               {/* 아바타 */}
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1e1e2e] text-sm font-semibold text-[#5e6ad2]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-sm font-semibold text-[#5e6ad2]">
                 {user.name.charAt(0)}
               </div>
 
               {/* 사용자 정보 */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-[#ededf0] truncate">{user.name}</p>
+                  <p className="font-medium text-[var(--text-primary)] truncate">{user.name}</p>
                   <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    user.role === 'ADMIN' ? 'bg-[#1e1e2e] text-[#5e6ad2]' : 'bg-[#1a1a22] text-[#55556a]'
+                    user.role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
                   }`}>
                     {user.role === 'ADMIN' ? '관리자' : '일반'}
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                   <span>{user.email}</span>
                   <span>·</span>
                   <span>응시 {user._count.submissions}회</span>
@@ -429,10 +429,10 @@ export default function AdminUsersPage() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setAssignTarget(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#18181f] p-6 shadow-2xl">
-            <h2 className="mb-1 text-base font-semibold text-[#ededf0]">시험 할당</h2>
-            <p className="mb-5 text-sm text-[#55556a]">
-              <span className="text-[#9090aa]">{assignTarget.name}</span>에게 접근 허용할 시험을 선택하세요.
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">시험 할당</h2>
+            <p className="mb-5 text-sm text-[var(--text-muted)]">
+              <span className="text-[var(--text-secondary)]">{assignTarget.name}</span>에게 접근 허용할 시험을 선택하세요.
             </p>
 
             {isLoadingExams ? (
@@ -440,7 +440,7 @@ export default function AdminUsersPage() {
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
               </div>
             ) : allExams.length === 0 ? (
-              <p className="py-4 text-center text-sm text-[#55556a]">등록된 시험이 없습니다.</p>
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 시험이 없습니다.</p>
             ) : (
               <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
                 {allExams.map((exam) => {
@@ -451,22 +451,22 @@ export default function AdminUsersPage() {
                       onClick={() => handleToggleExam(exam.id)}
                       className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
                         isAssigned
-                          ? 'border-[rgba(94,106,210,0.4)] bg-[#1a1a2e]'
-                          : 'border-[rgba(255,255,255,0.07)] bg-[#13131a] hover:border-[rgba(255,255,255,0.12)]'
+                          ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)]'
+                          : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
                       }`}
                     >
                       <div>
-                        <p className={`font-medium ${isAssigned ? 'text-[#ededf0]' : 'text-[#9090aa]'}`}>
+                        <p className={`font-medium ${isAssigned ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {exam.title}
                         </p>
-                        <p className="mt-0.5 text-xs text-[#44445a]">
+                        <p className="mt-0.5 text-xs text-[var(--text-faint)]">
                           문제 {exam._count?.questions ?? 0}개 · {formatDuration(exam.duration)}
                         </p>
                       </div>
                       <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium ${
                         isAssigned
                           ? 'bg-[#5e6ad2] text-white'
-                          : 'bg-[#1e1e28] text-[#55556a]'
+                          : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
                       }`}>
                         {isAssigned ? '할당됨' : '미할당'}
                       </span>

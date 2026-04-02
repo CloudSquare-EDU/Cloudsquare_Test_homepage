@@ -14,13 +14,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    'bg-[#5e6ad2] text-white hover:bg-[#6b76da] disabled:bg-[#2e3060] disabled:text-[#6870b0]',
+    'bg-[#5e6ad2] text-white hover:bg-[#6b76da] disabled:opacity-50',
   secondary:
-    'border border-[rgba(255,255,255,0.1)] bg-[#1e1e28] text-[#ededf0] hover:bg-[#262636] disabled:opacity-40',
+    'border border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-primary)] hover:bg-[var(--bg-inset)] disabled:opacity-40',
   danger:
-    'border border-[rgba(248,113,113,0.2)] bg-[#250d0d] text-[#f87171] hover:bg-[#350f0f] disabled:opacity-40',
+    'border border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)] hover:brightness-95 disabled:opacity-40',
   ghost:
-    'bg-transparent text-[#9090aa] hover:bg-[#1a1a24] hover:text-[#ededf0] disabled:opacity-40',
+    'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] disabled:opacity-40',
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -44,7 +44,7 @@ export const Button = ({
       disabled={disabled || isLoading}
       className={`
         inline-flex items-center justify-center font-medium rounded-md transition-colors
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5e6ad2] focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f0f11]
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5e6ad2] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)]
         disabled:cursor-not-allowed select-none
         ${variantClasses[variant]}
         ${sizeClasses[size]}

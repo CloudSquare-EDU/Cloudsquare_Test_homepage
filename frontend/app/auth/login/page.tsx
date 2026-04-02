@@ -32,21 +32,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0f0f11] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#5e6ad2] text-lg font-bold text-white">
             M
           </div>
-          <h1 className="text-lg font-semibold text-[#ededf0]">MockExam</h1>
-          <p className="mt-1 text-sm text-[#55556a]">계속하려면 로그인하세요</p>
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">모의시험사이트</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">계속하려면 로그인하세요</p>
         </div>
 
         {/* Form card */}
-        <div className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#18181f] p-6">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6">
           {error && (
-            <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+            <div className="mb-4 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2.5 text-xs text-[var(--danger-text)]">
               {error}
             </div>
           )}
@@ -75,7 +75,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-4 text-center text-xs text-[#44445a]">
+        <p className="mt-4 text-center text-xs text-[var(--text-faint)]">
           계정이 없으신 경우 관리자에게 문의하세요
         </p>
       </div>

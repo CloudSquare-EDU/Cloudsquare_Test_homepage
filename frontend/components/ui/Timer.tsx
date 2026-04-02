@@ -13,8 +13,8 @@ export const Timer = ({ formattedTime, isWarning }: TimerProps) => {
         inline-flex items-center gap-2 rounded-md px-3 py-1.5 font-mono text-sm font-semibold tabular-nums
         transition-colors
         ${isWarning
-          ? 'animate-pulse border border-red-800/60 bg-red-950/60 text-red-400'
-          : 'border border-[rgba(255,255,255,0.09)] bg-[#1e1e28] text-[#ededf0]'
+          ? 'animate-pulse border border-red-800/60 bg-red-950/60 text-[var(--danger-text)]'
+          : 'border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-primary)]'
         }
       `}
     >

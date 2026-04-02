@@ -17,17 +17,17 @@ const formatDuration = (s: number) => {
 };
 
 const scoreColor = (score: number | null): string => {
-  if (score === null) return 'text-[#55556a]';
-  if (score >= 80) return 'text-green-400';
-  if (score >= 60) return 'text-yellow-400';
-  return 'text-red-400';
+  if (score === null) return 'text-[var(--text-muted)]';
+  if (score >= 80) return 'text-[var(--success-text)]';
+  if (score >= 60) return 'text-[var(--warning-text)]';
+  return 'text-[var(--danger-text)]';
 };
 
 const scoreBadge = (score: number | null): string => {
-  if (score === null) return 'bg-[#1a1a22] text-[#55556a]';
-  if (score >= 80) return 'bg-[#0f2318] text-green-400';
-  if (score >= 60) return 'bg-[#1e1a0d] text-yellow-400';
-  return 'bg-[#250d0d] text-red-400';
+  if (score === null) return 'bg-[var(--bg-raised)] text-[var(--text-muted)]';
+  if (score >= 80) return 'bg-[var(--success-bg)] text-[var(--success-text)]';
+  if (score >= 60) return 'bg-[var(--warning-bg)] text-[var(--warning-text)]';
+  return 'bg-[var(--danger-bg)] text-[var(--danger-text)]';
 };
 
 export default function AdminResultsPage() {
@@ -94,21 +94,21 @@ export default function AdminResultsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[#ededf0]">응시 결과</h1>
-        <p className="mt-0.5 text-sm text-[#55556a]">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">응시 결과</h1>
+        <p className="mt-0.5 text-sm text-[var(--text-muted)]">
           시험별 응시 현황 확인 및 재응시 허용
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md border border-[rgba(248,113,113,0.2)] bg-[#250d0d] px-3 py-2.5 text-xs text-[#f87171]">
+        <div className="mb-4 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2.5 text-xs text-[var(--danger-text)]">
           {error}
         </div>
       )}
 
       {exams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[rgba(255,255,255,0.08)] py-16 text-center">
-          <p className="text-sm text-[#55556a]">등록된 시험이 없습니다</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+          <p className="text-sm text-[var(--text-muted)]">등록된 시험이 없습니다</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -122,22 +122,22 @@ export default function AdminResultsPage() {
             return (
               <div
                 key={exam.id}
-                className="overflow-hidden rounded-lg border border-[rgba(255,255,255,0.07)] bg-[#18181f] transition-colors hover:border-[rgba(255,255,255,0.1)]"
+                className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--border-hover)]"
               >
                 {/* 시험 헤더 */}
                 <button
                   onClick={() => toggleExam(exam.id)}
                   className="flex w-full items-center gap-4 px-5 py-4 text-left"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1e1e2e] text-[#5e6ad2]">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
                     <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
                       <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-[#ededf0] truncate">{exam.title}</p>
-                    <div className="mt-0.5 flex items-center gap-3 text-xs text-[#55556a]">
+                    <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
+                    <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
                       <span>문제 {exam._count?.questions ?? 0}개</span>
                       <span>·</span>
                       <span>{formatDuration(exam.duration)}</span>
@@ -145,16 +145,16 @@ export default function AdminResultsPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {submittedCount !== null && totalAssigned !== null ? (
-                      <span className="rounded px-2 py-1 text-xs bg-[#1e1e2e] text-[#9090aa]">
-                        <span className="text-[#ededf0] font-medium">{submittedCount}</span>
-                        <span className="text-[#44445a]">/{totalAssigned}</span>
+                      <span className="rounded px-2 py-1 text-xs bg-[var(--bg-raised)] text-[var(--text-secondary)]">
+                        <span className="text-[var(--text-primary)] font-medium">{submittedCount}</span>
+                        <span className="text-[var(--text-faint)]">/{totalAssigned}</span>
                         <span className="ml-1">명 응시</span>
                       </span>
                     ) : (
-                      <span className="text-xs text-[#44445a]">응시 {exam._count?.submissions ?? 0}회</span>
+                      <span className="text-xs text-[var(--text-faint)]">응시 {exam._count?.submissions ?? 0}회</span>
                     )}
                     <svg
-                      className={`h-3.5 w-3.5 text-[#44445a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      className={`h-3.5 w-3.5 text-[var(--text-faint)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
                     >
                       <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
@@ -164,35 +164,35 @@ export default function AdminResultsPage() {
 
                 {/* 펼쳐진 사용자 목록 */}
                 {isExpanded && (
-                  <div className="border-t border-[rgba(255,255,255,0.06)]">
+                  <div className="border-t border-[var(--border-subtle)]">
                     {isLoadingThis ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
                       </div>
                     ) : !status || status.users.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-[#55556a]">
+                      <p className="py-6 text-center text-sm text-[var(--text-muted)]">
                         할당된 사용자가 없습니다.
                       </p>
                     ) : (
                       <>
                         {/* 요약 바 */}
-                        <div className="flex items-center gap-5 border-b border-[rgba(255,255,255,0.05)] bg-[#13131a] px-5 py-2.5">
+                        <div className="flex items-center gap-5 border-b border-[var(--border-subtle)] bg-[var(--bg-inset)] px-5 py-2.5">
                           <div className="flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                            <span className="text-xs text-[#55556a]">
-                              완료 <span className="text-[#ededf0]">{status.users.filter((u) => u.submitted).length}</span>명
+                            <span className="text-xs text-[var(--text-muted)]">
+                              완료 <span className="text-[var(--text-primary)]">{status.users.filter((u) => u.submitted).length}</span>명
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#33334a]" />
-                            <span className="text-xs text-[#55556a]">
-                              미응시 <span className="text-[#9090aa]">{status.users.filter((u) => !u.submitted).length}</span>명
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--bg-raised)]" />
+                            <span className="text-xs text-[var(--text-muted)]">
+                              미응시 <span className="text-[var(--text-secondary)]">{status.users.filter((u) => !u.submitted).length}</span>명
                             </span>
                           </div>
                           {status.users.filter((u) => u.submitted).length > 0 && (
-                            <div className="ml-auto text-xs text-[#55556a]">
+                            <div className="ml-auto text-xs text-[var(--text-muted)]">
                               평균{' '}
-                              <span className="font-semibold text-[#ededf0]">
+                              <span className="font-semibold text-[var(--text-primary)]">
                                 {Math.round(
                                   status.users
                                     .filter((u) => u.submitted && u.submission?.score !== null)
@@ -206,7 +206,7 @@ export default function AdminResultsPage() {
                         </div>
 
                         {/* 사용자별 행 */}
-                        <div className="divide-y divide-[rgba(255,255,255,0.04)]">
+                        <div className="divide-y divide-[var(--border-subtle)]">
                           {status.users.map((userStatus: ExamUserStatus) => (
                             <div
                               key={userStatus.userId}
@@ -214,12 +214,12 @@ export default function AdminResultsPage() {
                             >
                               {/* 사용자 */}
                               <div className="flex items-center gap-3">
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e1e2e] text-xs font-semibold text-[#5e6ad2]">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[#5e6ad2]">
                                   {userStatus.userName.charAt(0)}
                                 </div>
                                 <div>
-                                  <p className="text-sm font-medium text-[#ededf0]">{userStatus.userName}</p>
-                                  <p className="text-xs text-[#44445a]">{userStatus.userEmail}</p>
+                                  <p className="text-sm font-medium text-[var(--text-primary)]">{userStatus.userName}</p>
+                                  <p className="text-xs text-[var(--text-faint)]">{userStatus.userEmail}</p>
                                 </div>
                               </div>
 
@@ -233,13 +233,13 @@ export default function AdminResultsPage() {
                                     </span>
 
                                     {/* 정답 수 */}
-                                    <span className="text-xs text-[#44445a]">
+                                    <span className="text-xs text-[var(--text-faint)]">
                                       {Math.round(((userStatus.submission.score ?? 0) / 100) * userStatus.submission.totalQuestions)}
                                       /{userStatus.submission.totalQuestions}
                                     </span>
 
                                     {/* 응시일 */}
-                                    <span className={`text-xs ${scoreColor(null)} text-[#44445a] text-right min-w-[60px]`}>
+                                    <span className={`text-xs ${scoreColor(null)} text-[var(--text-faint)] text-right min-w-[60px]`}>
                                       {new Date(userStatus.submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
                                       {' '}
                                       {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
@@ -265,7 +265,7 @@ export default function AdminResultsPage() {
                                     </Button>
                                   </>
                                 ) : (
-                                  <span className="rounded px-2 py-0.5 text-xs bg-[#1a1a22] text-[#44445a]">
+                                  <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">
                                     미응시
                                   </span>
                                 )}
