@@ -3,33 +3,33 @@ import { apiClient } from './client';
 import { CourseSummary, CourseDetail } from '../types';
 
 export const coursesApi = {
-  getAll: () => apiClient<CourseSummary[]>('GET', '/courses'),
+  getAll: () => apiClient.get<CourseSummary[]>('/courses'),
 
-  getById: (id: string) => apiClient<CourseDetail>('GET', `/courses/${id}`),
+  getById: (id: string) => apiClient.get<CourseDetail>(`/courses/${id}`),
 
   create: (name: string, description?: string) =>
-    apiClient<CourseSummary>('POST', '/courses', { name, description }),
+    apiClient.post<CourseSummary>('/courses', { name, description }),
 
   update: (id: string, name: string, description?: string) =>
-    apiClient<CourseSummary>('PATCH', `/courses/${id}`, { name, description }),
+    apiClient.patch<CourseSummary>(`/courses/${id}`, { name, description }),
 
   delete: (id: string) =>
-    apiClient<{ message: string }>('DELETE', `/courses/${id}`),
+    apiClient.delete<{ message: string }>(`/courses/${id}`),
 
   // 사용자 배정
   assignUser: (courseId: string, userId: string) =>
-    apiClient<{ message: string }>('POST', `/courses/${courseId}/users/${userId}`),
+    apiClient.post<{ message: string }>(`/courses/${courseId}/users/${userId}`, {}),
 
   removeUser: (courseId: string, userId: string) =>
-    apiClient<{ message: string }>('DELETE', `/courses/${courseId}/users/${userId}`),
+    apiClient.delete<{ message: string }>(`/courses/${courseId}/users/${userId}`),
 
   bulkAssignUsers: (courseId: string, userIds: string[]) =>
-    apiClient<{ updated: number }>('POST', `/courses/${courseId}/users/bulk`, { userIds }),
+    apiClient.post<{ updated: number }>(`/courses/${courseId}/users/bulk`, { userIds }),
 
   // 시험 배정
   assignExam: (courseId: string, examId: string) =>
-    apiClient<{ message: string }>('POST', `/courses/${courseId}/exams/${examId}`),
+    apiClient.post<{ message: string }>(`/courses/${courseId}/exams/${examId}`, {}),
 
   removeExam: (courseId: string, examId: string) =>
-    apiClient<{ message: string }>('DELETE', `/courses/${courseId}/exams/${examId}`),
+    apiClient.delete<{ message: string }>(`/courses/${courseId}/exams/${examId}`),
 };
