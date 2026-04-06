@@ -6,19 +6,17 @@ import { z } from 'zod';
 import { AuthRequest, ErrorCode } from '../types';
 import { AppError } from '../middlewares/errorHandler';
 import * as submissionService from '../services/submissionService';
+import { getAdminUserAssignment } from '../services/userExamAssignmentService';
 
 const submitSchema = z.object({
   examId: z.string().min(1, 'examId가 필요합니다.'),
-  answers: z
-    .array(
-      z.object({
-        questionId: z.string().min(1),
-        choiceIds: z
-          .array(z.string().min(1))
-          .min(1, '각 문제에 최소 하나 이상의 선택지를 선택해야 합니다.'),
-      }),
-    )
-    .min(1, '최소 하나 이상의 답안이 필요합니다.'),
+  // 프론트에서 미응답 문제는 제외하고 전송 — choiceIds는 항상 1개 이상
+  answers: z.array(
+    z.object({
+      questionId: z.string().min(1),
+      choiceIds: z.array(z.string().min(1)).min(1),
+    }),
+  ),
 });
 
 // GET /submissions/check/exam/:examId — 특정 시험의 내 응시 여부 확인 (단건 조회)
@@ -125,6 +123,22 @@ export const getSubmissionsByExam = async (
 ): Promise<void> => {
   try {
     const data = await submissionService.getSubmissionsByExam(req.params.examId);
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[getSubmissionsByExam] error:', err);
+    next(err);
+  }
+};
+
+// GET /submissions/admin/exams/:examId/users/:userId/assignment — 사용자별 배정 문제 (ADMIN)
+export const getUserAssignment = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { examId, userId } = req.params;
+    const data = await getAdminUserAssignment(userId, examId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

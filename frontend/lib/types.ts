@@ -23,7 +23,7 @@ export interface ExamSummary {
   title: string;
   description: string | null;
   duration: number;
-  questionCount: number;
+  questionCount: number | null;
   isPublished?: boolean;
   createdAt: string;
   course?: { id: string; name: string } | null;
@@ -88,18 +88,26 @@ export interface SubmissionSummary {
   };
 }
 
-export interface SubmissionDetail extends SubmissionSummary {
-  // answers: DB에서 선택지 하나당 레코드 1개 저장 → 복수 정답 문제는 여러 레코드
-  answers: Array<{
-    questionId: string;
-    isCorrect: boolean;
-    question: {
-      id: string;
-      content: string;
-      choices: Array<Choice & { isCorrect: boolean }>;
-    };
-    choice: Choice; // 이 레코드에서 선택한 단일 선택지
+// 백엔드에서 문제별로 가공된 응시 결과 (questionResults)
+export interface QuestionResult {
+  key: string;         // questionId 또는 bankQuestionId
+  content: string;     // 문제 내용
+  isCorrect: boolean;
+  choices: Array<{
+    id: string;
+    content: string;
+    isCorrect: boolean;  // 정답 여부
+    isSelected: boolean; // 사용자 선택 여부
   }>;
+}
+
+export interface SubmissionDetail {
+  id: string;
+  exam: { id: string; title: string; duration: number };
+  score: number | null;
+  totalQuestions: number;
+  submittedAt: string;
+  questionResults: QuestionResult[];
 }
 
 // 홈 화면용 — 시험 + 응시 여부 통합 타입 (GET /exams/my)
@@ -208,6 +216,19 @@ export interface UserExamStatus {
 export interface UserSubmissionStatus {
   user: { id: string; name: string; email: string };
   exams: UserExamStatus[];
+}
+
+// 관리자용: 사용자별 배정 문제
+export interface AssignedQuestion {
+  order: number;
+  id: string;
+  content: string;
+  choices: Array<{
+    id: string;
+    content: string;
+    isCorrect: boolean;
+    order: number;
+  }>;
 }
 
 // 특정 시험의 사용자별 응시 현황

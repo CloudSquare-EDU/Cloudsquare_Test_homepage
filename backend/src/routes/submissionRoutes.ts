@@ -32,6 +32,15 @@ submissionRoutes.get(
   submissionController.getSubmissionsByExam,
 );
 
+// GET /submissions/admin/exams/:examId/users/:userId/assignment — 사용자별 배정 문제 (ADMIN)
+// 반드시 /admin/exams/:examId 보다 앞에 선언하거나 경로가 겹치지 않게 유지
+submissionRoutes.get(
+  '/admin/exams/:examId/users/:userId/assignment',
+  authenticate,
+  requireAdmin,
+  submissionController.getUserAssignment,
+);
+
 // GET /submissions/admin/users/:userId — 특정 사용자 응시 현황 (ADMIN)
 submissionRoutes.get(
   '/admin/users/:userId',

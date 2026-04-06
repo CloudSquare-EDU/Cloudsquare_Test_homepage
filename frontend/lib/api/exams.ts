@@ -14,11 +14,21 @@ export const examsApi = {
 
   getById: (id: string) => apiClient.get<ExamDetail>(`/exams/${id}`),
 
-  create: (data: { title: string; description?: string; duration: number }) =>
-    apiClient.post<ExamDetail>('/exams', data),
+  create: (data: {
+    title: string;
+    description?: string;
+    duration: number;
+    questionBankId?: string;
+    questionCount?: number;
+  }) => apiClient.post<ExamDetail>('/exams', data),
 
-  update: (id: string, data: { title?: string; description?: string; duration?: number }) =>
-    apiClient.patch<ExamDetail>(`/exams/${id}`, data),
+  update: (id: string, data: {
+    title?: string;
+    description?: string;
+    duration?: number;
+    questionBankId?: string;
+    questionCount?: number;
+  }) => apiClient.patch<ExamDetail>(`/exams/${id}`, data),
 
   delete: (id: string) => apiClient.delete<{ message: string }>(`/exams/${id}`),
 

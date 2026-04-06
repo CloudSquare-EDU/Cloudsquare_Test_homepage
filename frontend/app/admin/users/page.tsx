@@ -10,6 +10,20 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
+import { downloadSampleExcel } from '@/lib/utils';
+
+const handleDownloadUserSample = () => {
+  downloadSampleExcel(
+    [
+      ['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)'],
+      ['홍길동', 'hong@example.com', 'password123', 'USER'],
+      ['김관리', 'admin@example.com', 'admin1234', 'USER'],
+      ['이수강', 'lee@example.com', 'pass5678', 'USER'],
+    ],
+    '사용자목록',
+    '계정_일괄생성_샘플',
+  );
+};
 
 interface ExcelUserRow {
   이름: string;
@@ -48,7 +62,7 @@ export default function AdminUsersPage() {
   const loadUsers = () => {
     setIsLoading(true);
     usersApi.getAll()
-      .then(setUsers)
+      .then((data) => setUsers([...data].sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }))))
       .catch(() => setError('사용자 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   };
@@ -270,10 +284,17 @@ export default function AdminUsersPage() {
       {/* ── 엑셀 일괄 생성 섹션 ── */}
       {createMode === 'excel' && (
         <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
-          <h2 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 계정 생성</h2>
-          <p className="mb-4 text-xs text-[var(--text-muted)]">
-            샘플 파일 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 계정이 자동으로 생성됩니다.
-          </p>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 계정 생성</h2>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                샘플 파일 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 계정이 자동으로 생성됩니다.
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={handleDownloadUserSample}>
+              📋 샘플 다운로드
+            </Button>
+          </div>
 
           {/* 컬럼 형식 안내 */}
           <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-3 text-xs">

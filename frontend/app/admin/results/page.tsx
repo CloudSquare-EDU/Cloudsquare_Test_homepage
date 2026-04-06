@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
-import { AdminExam, ExamSubmissionStatus, ExamUserStatus } from '@/lib/types';
+import { AdminExam, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
@@ -32,6 +32,24 @@ export default function AdminResultsPage() {
   } | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 배정 문제 모달
+  const [assignmentModal, setAssignmentModal] = useState<{
+    examId: string;
+    userName: string;
+    questions: AssignedQuestion[] | null;
+    isLoading: boolean;
+  } | null>(null);
+
+  const openAssignment = async (examId: string, userId: string, userName: string) => {
+    setAssignmentModal({ examId, userName, questions: null, isLoading: true });
+    try {
+      const questions = await submissionsApi.getUserAssignment(examId, userId);
+      setAssignmentModal({ examId, userName, questions, isLoading: false });
+    } catch {
+      setAssignmentModal({ examId, userName, questions: [], isLoading: false });
+    }
+  };
 
   useEffect(() => {
     examsApi
@@ -125,11 +143,6 @@ export default function AdminResultsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
-                    <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                      <span>문제 {exam._count?.questions ?? 0}개</span>
-                      <span>·</span>
-                      <span>{formatDuration(exam.duration)}</span>
-                    </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {submittedCount !== null && totalAssigned !== null ? (
@@ -233,6 +246,14 @@ export default function AdminResultsPage() {
                                       {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
 
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => openAssignment(exam.id, userStatus.userId, userStatus.userName)}
+                                    >
+                                      문제 목록
+                                    </Button>
+
                                     <Link href={`/submissions/${userStatus.submission.id}`}>
                                       <Button variant="secondary" size="sm">결과 보기</Button>
                                     </Link>
@@ -253,9 +274,18 @@ export default function AdminResultsPage() {
                                     </Button>
                                   </>
                                 ) : (
-                                  <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">
-                                    미응시
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => openAssignment(exam.id, userStatus.userId, userStatus.userName)}
+                                    >
+                                      문제 목록
+                                    </Button>
+                                    <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">
+                                      미응시
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -284,6 +314,98 @@ export default function AdminResultsPage() {
         onCancel={() => setResetTarget(null)}
         isLoading={isResetting}
       />
+
+      {/* 배정 문제 목록 모달 */}
+      {assignmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setAssignmentModal(null)}
+          />
+          <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
+              <div>
+                <p className="font-semibold text-[var(--text-primary)]">
+                  배정 문제 목록
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  {assignmentModal.userName}
+                </p>
+              </div>
+              <button
+                onClick={() => setAssignmentModal(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)]"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 본문 */}
+            <div className="overflow-y-auto">
+              {assignmentModal.isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+                </div>
+              ) : !assignmentModal.questions || assignmentModal.questions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <p className="text-sm text-[var(--text-muted)]">배정된 문제가 없습니다.</p>
+                  <p className="mt-1 text-xs text-[var(--text-faint)]">시험 응시 시 문제가 자동으로 배정됩니다.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {assignmentModal.questions.map((q) => (
+                    <div key={q.id} className="px-5 py-4">
+                      {/* 문제 */}
+                      <div className="flex gap-3">
+                        <span className="mt-0.5 shrink-0 text-xs font-semibold text-[#5e6ad2]">
+                          Q{q.order}
+                        </span>
+                        <p className="text-sm leading-relaxed text-[var(--text-primary)]">
+                          {q.content}
+                        </p>
+                      </div>
+                      {/* 선택지 */}
+                      <div className="mt-2.5 flex flex-col gap-1.5 pl-6">
+                        {q.choices.map((choice) => (
+                          <div
+                            key={choice.id}
+                            className={`flex items-start gap-2 rounded-md px-2.5 py-1.5 text-xs ${
+                              choice.isCorrect
+                                ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+                                : 'text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            {choice.isCorrect ? (
+                              <svg className="mt-0.5 h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M3 8l4 4 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full border border-current opacity-30" />
+                            )}
+                            <span>{choice.content}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 푸터 */}
+            {assignmentModal.questions && assignmentModal.questions.length > 0 && (
+              <div className="border-t border-[var(--border-subtle)] px-5 py-3">
+                <p className="text-xs text-[var(--text-faint)]">
+                  총 <span className="font-medium text-[var(--text-secondary)]">{assignmentModal.questions.length}</span>문제 배정됨
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

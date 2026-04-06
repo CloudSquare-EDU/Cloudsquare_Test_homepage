@@ -70,10 +70,7 @@ export const submitExam = async (input: SubmitInput) => {
     }
 
     const totalQuestions = assigned.length;
-    if (answers.length !== totalQuestions) {
-      throw new AppError(400, ErrorCode.BAD_REQUEST,
-        `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
-    }
+    // 미응답 허용 (타이머 만료 시 부분 제출 가능)
 
     // O(1) 조회를 위한 Map 생성 (기존 O(n²) Array.find 루프 제거)
     const assignedMap = new Map(assigned.map((a) => [a.bankQuestionId, a]));
@@ -145,10 +142,7 @@ export const submitExam = async (input: SubmitInput) => {
 
   // ── 수동 문제 채점 (기존) ──────────────────────────────────────
   const totalQuestions = exam.questions.length;
-  if (answers.length !== totalQuestions) {
-    throw new AppError(400, ErrorCode.BAD_REQUEST,
-      `모든 문제에 답해야 합니다. (${totalQuestions}개 필요, ${answers.length}개 제출)`);
-  }
+  // 미응답 허용 (타이머 만료 시 부분 제출 가능)
 
   // O(1) 조회를 위한 Map 생성
   const questionMap = new Map(exam.questions.map((q) => [q.id, q]));
@@ -249,6 +243,8 @@ export const getMySubmissions = async (userId: string) => {
 };
 
 // 응시 결과 상세 조회
+// 설계 포인트: 백엔드에서 answer 레코드를 questionResults 형태로 가공해서 반환
+//   → 클라이언트가 answer.question ?? answer.bankQuestion 조인할 필요 없음
 export const getSubmissionById = async (id: string, userId: string, isAdmin: boolean) => {
   const submission = await prisma.submission.findUnique({
     where: { id },
@@ -256,14 +252,10 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
       exam: { select: { id: true, title: true, duration: true } },
       answers: {
         include: {
-          question: {
-            include: {
-              choices: {
-                orderBy: { order: 'asc' },
-              },
-            },
-          },
-          choice: { select: { id: true, content: true } },
+          question: { include: { choices: { orderBy: { order: 'asc' } } } },
+          choice:      { select: { id: true } },
+          bankQuestion: { include: { choices: { orderBy: { order: 'asc' } } } },
+          bankChoice:   { select: { id: true } },
         },
       },
     },
@@ -271,12 +263,56 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
 
   if (!submission) throw new AppError(404, ErrorCode.NOT_FOUND, '응시 기록을 찾을 수 없습니다.');
 
-  // 본인 응시 기록만 조회 가능 (관리자는 전체 조회 가능)
   if (!isAdmin && submission.userId !== userId) {
     throw new AppError(403, ErrorCode.FORBIDDEN, '접근 권한이 없습니다.');
   }
 
-  return submission;
+  // ── 문제별로 answer 레코드를 그룹화 ────────────────────────────
+  type ChoiceResult = { id: string; content: string; isCorrect: boolean; isSelected: boolean };
+  type QuestionResult = { key: string; content: string; isCorrect: boolean; choices: ChoiceResult[] };
+
+  const questionMap = new Map<string, QuestionResult>();
+
+  for (const answer of submission.answers) {
+    const q = answer.question ?? answer.bankQuestion;
+    const selectedId = answer.choice?.id ?? answer.bankChoice?.id ?? null;
+    const key = answer.questionId ?? answer.bankQuestionId ?? null;
+
+    if (!q || !key) continue; // 문제 정보 없으면 스킵
+
+    if (!questionMap.has(key)) {
+      const choices: ChoiceResult[] = (q.choices as Array<{ id: string; content: string; isCorrect: boolean }>).map((ch) => ({
+        id: ch.id,
+        content: ch.content,
+        isCorrect: ch.isCorrect,
+        isSelected: false,
+      }));
+      questionMap.set(key, {
+        key,
+        content: q.content,
+        isCorrect: answer.isCorrect,
+        choices,
+      });
+    }
+
+    // 사용자가 선택한 선택지 표시
+    if (selectedId) {
+      const qr = questionMap.get(key)!;
+      const idx = qr.choices.findIndex((ch) => ch.id === selectedId);
+      if (idx !== -1) {
+        qr.choices[idx] = { ...qr.choices[idx], isSelected: true };
+      }
+    }
+  }
+
+  return {
+    id: submission.id,
+    exam: submission.exam,
+    score: submission.score,
+    totalQuestions: submission.totalQuestions,
+    submittedAt: submission.submittedAt,
+    questionResults: Array.from(questionMap.values()),
+  };
 };
 
 // 전체 응시 결과 조회 (ADMIN)
@@ -327,43 +363,90 @@ export const getSubmissionsByUser = async (userId: string) => {
   };
 };
 
-// 특정 시험의 응시 현황 조회 (ADMIN) — 할당된 사용자 + 응시 여부 포함
+// 특정 시험의 응시 현황 조회 (ADMIN)
+// 설계 포인트:
+//   - UserExam 직접 할당 사용자 + 과정(course) 기반 사용자 모두 포함
+//   - 응시한 사용자는 미할당이더라도 목록에 표시 (edge case 대응)
 export const getSubmissionsByExam = async (examId: string) => {
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
-    select: { id: true, title: true, duration: true },
+    select: { id: true, title: true, duration: true, courseId: true },
   });
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
 
-  // 이 시험에 할당된 사용자 목록
-  const assignments = await prisma.userExam.findMany({
+  // 1) 직접 할당된 사용자
+  const directAssignments = await prisma.userExam.findMany({
     where: { examId },
-    include: {
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  // 2) 과정 기반 사용자 (exam.courseId가 있으면 해당 과정에 속한 USER 역할 계정)
+  const courseUsers =
+    exam.courseId
+      ? await prisma.user.findMany({
+          where: { courseId: exam.courseId, role: 'USER' },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+
+  // 3) 이 시험의 제출 목록 (응시한 사람은 무조건 표시)
+  // 주의: Prisma에서 include + select 동시 사용 불가 → select만 사용
+  const submissions = await prisma.submission.findMany({
+    where: { examId },
+    select: {
+      id: true,
+      userId: true,
+      score: true,
+      totalQuestions: true,
+      submittedAt: true,
       user: { select: { id: true, name: true, email: true } },
     },
   });
 
-  // 이 시험의 제출 목록
-  const submissions = await prisma.submission.findMany({
-    where: { examId },
-    select: { id: true, userId: true, score: true, totalQuestions: true, submittedAt: true },
-  });
+  // 4) 사용자 목록 통합 (중복 제거 — userId 기준)
+  const userMap = new Map<string, { id: string; name: string; email: string }>();
+
+  for (const a of directAssignments) {
+    userMap.set(a.user.id, a.user);
+  }
+  for (const u of courseUsers) {
+    userMap.set(u.id, u);
+  }
+  // 응시한 사람은 할당 여부와 무관하게 포함
+  for (const s of submissions) {
+    if (!userMap.has(s.userId)) {
+      userMap.set(s.userId, s.user);
+    }
+  }
 
   const submissionMap = new Map(submissions.map((s) => [s.userId, s]));
 
-  return {
-    exam,
-    users: assignments.map((a) => {
-      const sub = submissionMap.get(a.userId) ?? null;
-      return {
-        userId: a.user.id,
-        userName: a.user.name,
-        userEmail: a.user.email,
-        submitted: !!sub,
-        submission: sub,
-      };
-    }),
-  };
+  const users = Array.from(userMap.values()).map((u) => {
+    const sub = submissionMap.get(u.id) ?? null;
+    return {
+      userId: u.id,
+      userName: u.name,
+      userEmail: u.email,
+      submitted: !!sub,
+      submission: sub
+        ? {
+            id: sub.id,
+            score: sub.score,
+            totalQuestions: sub.totalQuestions,
+            submittedAt: sub.submittedAt,
+          }
+        : null,
+    };
+  });
+
+  // 응시 완료한 사람 → 미응시 사람 순으로 정렬
+  users.sort((a, b) => {
+    if (a.submitted && !b.submitted) return -1;
+    if (!a.submitted && b.submitted) return 1;
+    return a.userName.localeCompare(b.userName, 'ko', { numeric: true });
+  });
+
+  return { exam, users };
 };
 
 // 관리자: 재응시 허용 — submission 삭제 + 문제은행 배정 초기화

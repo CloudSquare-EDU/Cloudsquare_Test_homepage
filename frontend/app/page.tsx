@@ -109,7 +109,7 @@ export default function HomePage() {
                     {exam.title}
                   </p>
                   <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                    <span>{exam.questionCount}문제</span>
+                    <span>{exam.questionCount != null ? `${exam.questionCount}문제` : '문제수 미정'}</span>
                     <span>⏱ {formatDuration(exam.duration)}</span>
                     {done && (
                       <span className="text-green-500">

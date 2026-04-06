@@ -116,6 +116,31 @@ export const resetAssignment = async (userId: string, examId: string) => {
   await prisma.userExamQuestion.deleteMany({ where: { userId, examId } });
 };
 
+// 관리자용: 특정 사용자의 배정 문제 전체 조회 (정답 포함)
+export const getAdminUserAssignment = async (userId: string, examId: string) => {
+  const assigned = await prisma.userExamQuestion.findMany({
+    where: { userId, examId },
+    orderBy: { assignedOrder: 'asc' },
+    include: {
+      bankQuestion: {
+        include: { choices: { orderBy: { order: 'asc' } } },
+      },
+    },
+  });
+
+  return assigned.map((ueq) => ({
+    order: ueq.assignedOrder,
+    id: ueq.bankQuestion.id,
+    content: ueq.bankQuestion.content,
+    choices: ueq.bankQuestion.choices.map((c) => ({
+      id: c.id,
+      content: c.content,
+      isCorrect: c.isCorrect, // 관리자는 정답 표시
+      order: c.order,
+    })),
+  }));
+};
+
 // 특정 사용자의 특정 시험 배정 문제 ID 목록 (채점용)
 export const getAssignedQuestionIds = async (
   userId: string,

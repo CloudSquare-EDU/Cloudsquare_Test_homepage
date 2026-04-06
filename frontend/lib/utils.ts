@@ -1,5 +1,21 @@
 // lib/utils.ts
 // 공통 유틸리티 함수 모음 — 여러 페이지에서 재사용
+import * as XLSX from 'xlsx';
+
+// ── 엑셀 샘플 다운로드 ─────────────────────────────────────────
+// rows: 데이터 행 배열 (헤더 포함)
+// sheetName: 시트 이름
+// fileName: 다운로드 파일명 (.xlsx 자동 붙음)
+export const downloadSampleExcel = (
+  rows: (string | number)[][],
+  sheetName: string,
+  fileName: string,
+): void => {
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `${fileName}.xlsx`);
+};
 
 // ── 시간 포맷 ──────────────────────────────────────────────────
 export const formatDuration = (s: number): string => {

@@ -8,13 +8,6 @@ import { submissionsApi } from '@/lib/api/submissions';
 import { SubmissionDetail } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 
-interface AnswerGroup {
-  questionId: string;
-  isCorrect: boolean;
-  question: SubmissionDetail['answers'][number]['question'];
-  selectedChoiceIds: Set<string>;
-}
-
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [submission, setSubmission] = useState<SubmissionDetail | null>(null);
@@ -45,27 +38,15 @@ export default function SubmissionDetailPage() {
     );
   }
 
-  // questionId 기준으로 그룹핑
-  const groupMap = new Map<string, AnswerGroup>();
-  for (const answer of submission.answers) {
-    const existing = groupMap.get(answer.questionId);
-    if (existing) {
-      existing.selectedChoiceIds.add(answer.choice.id);
-    } else {
-      groupMap.set(answer.questionId, {
-        questionId: answer.questionId,
-        isCorrect: answer.isCorrect,
-        question: answer.question,
-        selectedChoiceIds: new Set([answer.choice.id]),
-      });
-    }
-  }
-  const answerGroups = Array.from(groupMap.values());
-  const correctCount = answerGroups.filter((g) => g.isCorrect).length;
-  const score = submission.score ?? Math.round((correctCount / submission.totalQuestions) * 100);
-
+  const { questionResults, score, totalQuestions, submittedAt, exam } = submission;
+  const correctCount = questionResults.filter((q) => q.isCorrect).length;
+  const finalScore = score ?? Math.round((correctCount / totalQuestions) * 100);
   const scoreColor =
-    score >= 80 ? 'text-[var(--success-text)]' : score >= 60 ? 'text-[var(--warning-text)]' : 'text-[var(--danger-text)]';
+    finalScore >= 80
+      ? 'text-[var(--success-text)]'
+      : finalScore >= 60
+      ? 'text-[var(--warning-text)]'
+      : 'text-[var(--danger-text)]';
 
   return (
     <div>
@@ -73,9 +54,9 @@ export default function SubmissionDetailPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <p className="text-xs text-[var(--text-muted)] mb-1">
-            {new Date(submission.submittedAt).toLocaleString('ko-KR')} 제출
+            {new Date(submittedAt).toLocaleString('ko-KR')} 제출
           </p>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">{submission.exam.title}</h1>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">{exam.title}</h1>
         </div>
         <Link href="/submissions">
           <Button variant="ghost" size="sm">← 기록 목록</Button>
@@ -86,7 +67,10 @@ export default function SubmissionDetailPage() {
       <div className="mb-6 flex items-center gap-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-6 py-5">
         <div>
           <p className="text-xs text-[var(--text-muted)] mb-1">최종 점수</p>
-          <p className={`text-5xl font-black ${scoreColor}`}>{score}<span className="text-xl font-normal text-[var(--text-muted)]">점</span></p>
+          <p className={`text-5xl font-black ${scoreColor}`}>
+            {finalScore}
+            <span className="text-xl font-normal text-[var(--text-muted)]">점</span>
+          </p>
         </div>
         <div className="h-12 w-px bg-[var(--border)]" />
         <div className="flex flex-col gap-1">
@@ -96,9 +80,9 @@ export default function SubmissionDetailPage() {
           </div>
           <div className="flex items-center gap-2 text-sm">
             <span className="h-2 w-2 rounded-full bg-red-500" />
-            <span className="text-[var(--text-secondary)]">오답 {submission.totalQuestions - correctCount}문제</span>
+            <span className="text-[var(--text-secondary)]">오답 {totalQuestions - correctCount}문제</span>
           </div>
-          <div className="text-xs text-[var(--text-muted)]">총 {submission.totalQuestions}문제</div>
+          <div className="text-xs text-[var(--text-muted)]">총 {totalQuestions}문제</div>
         </div>
       </div>
 
@@ -108,22 +92,26 @@ export default function SubmissionDetailPage() {
         <span className="text-xs text-[var(--text-faint)]">— 정답은 ✓, 내가 선택한 오답은 취소선</span>
       </div>
       <div className="flex flex-col gap-2">
-        {answerGroups.map((group, idx) => {
-          const isMulti = group.question.choices.filter((c) => c.isCorrect).length > 1;
+        {questionResults.map((qr, idx) => {
+          const isMulti = qr.choices.filter((c) => c.isCorrect).length > 1;
           return (
             <div
-              key={group.questionId}
+              key={qr.key}
               className={`rounded-lg border px-4 py-4 ${
-                group.isCorrect
+                qr.isCorrect
                   ? 'border-[var(--success-border)] bg-[var(--success-bg)]'
                   : 'border-[rgba(248,113,113,0.15)] bg-[var(--danger-bg)]'
               }`}
             >
               <div className="mb-3 flex items-start gap-2">
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                  group.isCorrect ? 'bg-green-900/50 text-[var(--success-text)]' : 'bg-red-900/50 text-[var(--danger-text)]'
-                }`}>
-                  {group.isCorrect ? '정답' : '오답'}
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                    qr.isCorrect
+                      ? 'bg-green-900/50 text-[var(--success-text)]'
+                      : 'bg-red-900/50 text-[var(--danger-text)]'
+                  }`}
+                >
+                  {qr.isCorrect ? '정답' : '오답'}
                 </span>
                 {isMulti && (
                   <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[#8090d8]">
@@ -131,23 +119,26 @@ export default function SubmissionDetailPage() {
                   </span>
                 )}
                 <p className="text-sm font-medium text-[var(--text-primary)]">
-                  Q{idx + 1}. {group.question.content}
+                  Q{idx + 1}. {qr.content}
                 </p>
               </div>
               <div className="flex flex-col gap-1.5 pl-4">
-                {group.question.choices.map((choice) => {
-                  const isMine = group.selectedChoiceIds.has(choice.id);
-                  const isRight = choice.isCorrect;
-
+                {qr.choices.map((choice) => {
                   let cls = 'text-sm text-[var(--text-muted)]';
                   let suffix = '';
-                  if (isRight && isMine) { cls = 'text-sm font-medium text-[var(--success-text)]'; suffix = ' ✓'; }
-                  else if (isRight && !isMine) { cls = 'text-sm font-medium text-green-600'; suffix = ' ✓ (정답)'; }
-                  else if (!isRight && isMine) { cls = 'text-sm text-red-500 line-through'; suffix = ' ✗'; }
-
+                  if (choice.isCorrect && choice.isSelected) {
+                    cls = 'text-sm font-medium text-[var(--success-text)]';
+                    suffix = ' ✓';
+                  } else if (choice.isCorrect && !choice.isSelected) {
+                    cls = 'text-sm font-medium text-green-600';
+                    suffix = ' ✓ (정답)';
+                  } else if (!choice.isCorrect && choice.isSelected) {
+                    cls = 'text-sm text-red-500 line-through';
+                    suffix = ' ✗';
+                  }
                   return (
                     <p key={choice.id} className={cls}>
-                      {choice.order}. {choice.content}{suffix}
+                      {choice.content}{suffix}
                     </p>
                   );
                 })}

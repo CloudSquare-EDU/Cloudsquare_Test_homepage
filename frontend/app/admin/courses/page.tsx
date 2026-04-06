@@ -310,7 +310,7 @@ export default function AdminCoursesPage() {
                             <p className="text-xs text-[var(--text-faint)]">배정된 계정이 없습니다</p>
                           ) : (
                             <div className="flex flex-col gap-1.5">
-                              {detail.users.map((u) => (
+                              {[...detail.users].sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true })).map((u) => (
                                 <div key={u.id} className="flex items-center gap-2">
                                   <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-raised)] text-[9px] font-bold text-[#5e6ad2]">
                                     {u.name.charAt(0)}

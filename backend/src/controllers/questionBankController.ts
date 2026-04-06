@@ -32,53 +32,53 @@ const bulkImportSchema = z.object({
 // ── 핸들러 ────────────────────────────────────────────────────
 
 export const listBanks = async (_req: AuthRequest, res: Response) => {
-  const banks = await svc.getAllBanks();
-  res.json(banks);
+  const data = await svc.getAllBanks();
+  res.json({ success: true, data });
 };
 
 export const getBank = async (req: AuthRequest, res: Response) => {
-  const bank = await svc.getBankById(req.params.id);
-  res.json(bank);
+  const data = await svc.getBankById(req.params.id);
+  res.json({ success: true, data });
 };
 
 export const createBank = async (req: AuthRequest, res: Response) => {
   const { name, description } = createBankSchema.parse(req.body);
-  const bank = await svc.createBank(name, description);
-  res.status(201).json(bank);
+  const data = await svc.createBank(name, description);
+  res.status(201).json({ success: true, data });
 };
 
 export const updateBank = async (req: AuthRequest, res: Response) => {
   const { name, description } = createBankSchema.parse(req.body);
-  const bank = await svc.updateBank(req.params.id, name, description);
-  res.json(bank);
+  const data = await svc.updateBank(req.params.id, name, description);
+  res.json({ success: true, data });
 };
 
 export const deleteBank = async (req: AuthRequest, res: Response) => {
   await svc.deleteBank(req.params.id);
-  res.json({ message: '문제은행이 삭제되었습니다.' });
+  res.json({ success: true, data: { message: '문제은행이 삭제되었습니다.' } });
 };
 
 export const addQuestion = async (req: AuthRequest, res: Response) => {
   const input = questionSchema.parse(req.body);
-  const question = await svc.addQuestion(req.params.id, input);
-  res.status(201).json(question);
+  const data = await svc.addQuestion(req.params.id, input);
+  res.status(201).json({ success: true, data });
 };
 
 export const updateQuestion = async (req: AuthRequest, res: Response) => {
   const input = questionSchema.parse(req.body);
-  const question = await svc.updateQuestion(req.params.questionId, input);
-  res.json(question);
+  const data = await svc.updateQuestion(req.params.questionId, input);
+  res.json({ success: true, data });
 };
 
 export const deleteQuestion = async (req: AuthRequest, res: Response) => {
   await svc.deleteQuestion(req.params.questionId);
-  res.json({ message: '문제가 삭제되었습니다.' });
+  res.json({ success: true, data: { message: '문제가 삭제되었습니다.' } });
 };
 
 // 엑셀 일괄 등록 — 파싱된 JSON 배열을 그대로 받음
 // 프론트에서 SheetJS로 파싱 후 POST /question-banks/:id/bulk
 export const bulkImport = async (req: AuthRequest, res: Response) => {
   const { questions, replace } = bulkImportSchema.parse(req.body);
-  const result = await svc.bulkAddQuestions(req.params.id, questions, replace);
-  res.json(result);
+  const data = await svc.bulkAddQuestions(req.params.id, questions, replace);
+  res.json({ success: true, data });
 };

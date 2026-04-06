@@ -116,10 +116,10 @@ export default function ExamPage() {
     if (!exam) return;
     setIsSubmitting(true);
     setShowConfirmModal(false);
-    const answerList = exam.questions.map((q) => ({
-      questionId: q.id,
-      choiceIds: answers[q.id] ?? [],
-    }));
+    // 미응답 문제 제외 — 빈 choiceIds는 백엔드 검증 실패 유발
+    const answerList = exam.questions
+      .filter((q) => (answers[q.id]?.length ?? 0) > 0)
+      .map((q) => ({ questionId: q.id, choiceIds: answers[q.id]! }));
     try {
       const result = await submissionsApi.submit({ examId: exam.id, answers: answerList });
       localStorage.removeItem(DRAFT_KEY);

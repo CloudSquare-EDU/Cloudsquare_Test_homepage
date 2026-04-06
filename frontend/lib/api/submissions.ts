@@ -9,6 +9,7 @@ import {
   AdminSubmissionSummary,
   UserSubmissionStatus,
   ExamSubmissionStatus,
+  AssignedQuestion,
 } from '../types';
 
 export const submissionsApi = {
@@ -36,6 +37,10 @@ export const submissionsApi = {
   // 재응시 허용 — submission 삭제 (ADMIN)
   reset: (submissionId: string) =>
     apiClient.delete<{ message: string }>(`/submissions/${submissionId}/reset`),
+
+  // 사용자별 배정 문제 목록 (ADMIN)
+  getUserAssignment: (examId: string, userId: string) =>
+    apiClient.get<AssignedQuestion[]>(`/submissions/admin/exams/${examId}/users/${userId}/assignment`),
 
   // 특정 시험의 내 제출 여부 확인 — 전용 엔드포인트로 단건 조회 (전체 목록 로드 불필요)
   checkExamById: (examId: string) =>
