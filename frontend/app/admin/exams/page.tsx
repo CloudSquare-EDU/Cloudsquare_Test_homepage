@@ -17,7 +17,7 @@ export default function AdminExamsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '' });
+  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -68,13 +68,15 @@ export default function AdminExamsPage() {
         duration: form.duration,
         questionBankId: form.questionBankId || undefined,
         questionCount: form.questionCount ? parseInt(form.questionCount, 10) : undefined,
+        startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
+        deadline: form.deadline ? new Date(form.deadline).toISOString() : null,
       });
       // 과정 매핑
       if (form.courseId && created.id) {
         await coursesApi.assignExam(form.courseId, created.id);
       }
       setShowCreate(false);
-      setForm({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '' });
+      setForm({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
       loadExams();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '생성 중 오류가 발생했습니다.');
@@ -249,6 +251,29 @@ export default function AdminExamsPage() {
                 </p>
               )}
             </div>
+            {/* 응시 기간 (시작일 / 마감일) */}
+            <div className="flex gap-3">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">응시 시작일 (선택)</label>
+                <input
+                  type="datetime-local"
+                  value={form.startDate}
+                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+                />
+                <p className="text-[10px] text-[var(--text-faint)]">설정 전까지 응시 불가</p>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">응시 마감일 (선택)</label>
+                <input
+                  type="datetime-local"
+                  value={form.deadline}
+                  onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+                />
+                <p className="text-[10px] text-[var(--text-faint)]">설정하지 않으면 기한 없음</p>
+              </div>
+            </div>
             <div className="flex justify-end pt-1">
               <Button type="submit" isLoading={isCreating} size="sm">생성</Button>
             </div>
@@ -308,6 +333,22 @@ export default function AdminExamsPage() {
                   <span>응시 {exam._count.submissions}회</span>
                   <span>·</span>
                   <span>{formatDuration(exam.duration)}</span>
+                  {exam.startDate && (
+                    <>
+                      <span>·</span>
+                      <span className={new Date(exam.startDate) > new Date() ? 'text-[#5e6ad2]' : 'text-[var(--text-faint)]'}>
+                        시작 {new Date(exam.startDate).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  )}
+                  {exam.deadline && (
+                    <>
+                      <span>·</span>
+                      <span className={new Date(exam.deadline) < new Date() ? 'text-[var(--danger-text)]' : 'text-[var(--warning-text)]'}>
+                        마감 {new Date(exam.deadline).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">

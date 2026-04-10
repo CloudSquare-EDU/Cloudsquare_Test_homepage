@@ -93,6 +93,43 @@ export default function QuestionBanksPage() {
   const [deletingQuestionBankId, setDeletingQuestionBankId] = useState<string | null>(null);
   const [isDeletingQuestion, setIsDeletingQuestion] = useState(false);
 
+  // 문제 편집
+  interface EditingQuestion {
+    bankId: string;
+    questionId: string;
+    content: string;
+    choices: Array<{ id: string; content: string; isCorrect: boolean; order: number }>;
+  }
+  const [editingQuestion, setEditingQuestion] = useState<EditingQuestion | null>(null);
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
+
+  const openEditQuestion = (bankId: string, q: QuestionBankDetail['questions'][number]) => {
+    setEditingQuestion({
+      bankId,
+      questionId: q.id,
+      content: q.content,
+      choices: q.choices.map((c) => ({ id: c.id, content: c.content, isCorrect: c.isCorrect, order: c.order })),
+    });
+  };
+
+  const handleSaveQuestion = async () => {
+    if (!editingQuestion) return;
+    setIsSavingQuestion(true);
+    try {
+      await questionBanksApi.updateQuestion(editingQuestion.bankId, editingQuestion.questionId, {
+        content: editingQuestion.content,
+        choices: editingQuestion.choices.map((c) => ({ content: c.content, isCorrect: c.isCorrect, order: c.order })),
+      });
+      showSuccess('문제가 수정되었습니다.');
+      await refreshDetail(editingQuestion.bankId);
+      setEditingQuestion(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '문제 수정 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingQuestion(false);
+    }
+  };
+
   const loadBanks = async () => {
     try {
       const data = await questionBanksApi.getAll();
@@ -522,15 +559,26 @@ export default function QuestionBanksPage() {
                                       ))}
                                     </div>
                                   </div>
-                                  <button
-                                    onClick={() => { setDeleteQuestionId(q.id); setDeletingQuestionBankId(bank.id); }}
-                                    className="shrink-0 rounded p-1 text-[var(--text-faint)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger-text)] transition-colors"
-                                    title="문제 삭제"
-                                  >
-                                    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                      <path d="M3 4h10M6 4V2h4v2M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" strokeLinecap="round" />
-                                    </svg>
-                                  </button>
+                                  <div className="flex shrink-0 gap-1">
+                                    <button
+                                      onClick={() => openEditQuestion(bank.id, q)}
+                                      className="rounded p-1 text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[#5e6ad2] transition-colors"
+                                      title="문제 편집"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M11 2l3 3-8 8H3v-3L11 2z" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => { setDeleteQuestionId(q.id); setDeletingQuestionBankId(bank.id); }}
+                                      className="rounded p-1 text-[var(--text-faint)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger-text)] transition-colors"
+                                      title="문제 삭제"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M3 4h10M6 4V2h4v2M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" strokeLinecap="round" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -569,6 +617,89 @@ export default function QuestionBanksPage() {
         onCancel={() => { setDeleteQuestionId(null); setDeletingQuestionBankId(null); }}
         isLoading={isDeletingQuestion}
       />
+
+      {/* ── 문제 편집 모달 ── */}
+      {editingQuestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setEditingQuestion(null)} />
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
+              <p className="font-semibold text-[var(--text-primary)]">문제 편집</p>
+              <button onClick={() => setEditingQuestion(null)} className="rounded p-1 text-[var(--text-faint)] hover:bg-[var(--bg-raised)]">
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 본문 */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              {/* 문제 내용 */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">문제 내용</label>
+                <textarea
+                  value={editingQuestion.content}
+                  onChange={(e) => setEditingQuestion({ ...editingQuestion, content: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#5e6ad2] focus:outline-none resize-none"
+                />
+              </div>
+
+              {/* 선택지 */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">선택지 (정답 체크)</label>
+                {editingQuestion.choices.map((choice, i) => (
+                  <div key={choice.id} className="flex items-center gap-2">
+                    <span className="shrink-0 w-5 text-center text-xs font-mono text-[var(--text-faint)]">{choice.order}.</span>
+                    <input
+                      type="text"
+                      value={choice.content}
+                      onChange={(e) => {
+                        const next = [...editingQuestion.choices];
+                        next[i] = { ...next[i], content: e.target.value };
+                        setEditingQuestion({ ...editingQuestion, choices: next });
+                      }}
+                      className="flex-1 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] focus:border-[#5e6ad2] focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const next = [...editingQuestion.choices];
+                        next[i] = { ...next[i], isCorrect: !next[i].isCorrect };
+                        setEditingQuestion({ ...editingQuestion, choices: next });
+                      }}
+                      className={`shrink-0 flex h-6 w-6 items-center justify-center rounded border text-xs transition-colors ${
+                        choice.isCorrect
+                          ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white'
+                          : 'border-[var(--border)] text-[var(--text-faint)] hover:border-[#5e6ad2]'
+                      }`}
+                      title="정답 토글"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                ))}
+                {editingQuestion.choices.some((c) => c.isCorrect) || (
+                  <p className="text-xs text-[var(--danger-text)]">정답을 1개 이상 선택하세요.</p>
+                )}
+              </div>
+            </div>
+
+            {/* 푸터 */}
+            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-3">
+              <Button variant="ghost" size="sm" onClick={() => setEditingQuestion(null)}>취소</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveQuestion}
+                disabled={isSavingQuestion || !editingQuestion.content.trim() || !editingQuestion.choices.some((c) => c.isCorrect)}
+              >
+                {isSavingQuestion ? '저장 중...' : '저장'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

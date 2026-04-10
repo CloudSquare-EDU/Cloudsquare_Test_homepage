@@ -134,16 +134,18 @@ model User {
 // questionCount:  문제은행에서 사용자별 추첨할 문제 수
 // ─────────────────────────────────────────
 model Exam {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   title          String
   description    String?
   duration       Int
-  isPublished    Boolean  @default(false)
+  isPublished    Boolean   @default(false)
   courseId       String?
-  questionBankId String?  // 문제은행 연결 (null이면 수동 문제)
-  questionCount  Int?     // 사용자별 출제 문제 수 (문제은행 사용 시)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  questionBankId String?   // 문제은행 연결 (null이면 수동 문제)
+  questionCount  Int?      // 사용자별 출제 문제 수 (문제은행 사용 시)
+  startDate      DateTime? // 응시 시작일 (null이면 즉시 응시 가능)
+  deadline       DateTime? // 응시 마감일 (null이면 기한 없음)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   course            Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
   questionBank      QuestionBank?      @relation(fields: [questionBankId], references: [id], onDelete: SetNull)

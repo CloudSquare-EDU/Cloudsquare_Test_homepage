@@ -458,9 +458,6 @@ export default function AdminCoursesPage() {
                         <p className={`text-xs font-medium truncate ${isInThisCourse ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {exam.title}
                         </p>
-                        <p className="text-[10px] text-[var(--text-faint)]">
-                          문제 {exam._count?.questions ?? 0}개
-                        </p>
                       </div>
                       {isInThisCourse && (
                         <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[#5e6ad2] text-white">배정됨</span>

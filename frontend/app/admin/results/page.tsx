@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
 import { AdminExam, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } from '@/lib/types';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError } from '@/lib/api/client';
@@ -32,6 +33,32 @@ export default function AdminResultsPage() {
   } | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 필터/정렬
+  type FilterMode = 'all' | 'submitted' | 'not_submitted';
+  type SortMode = 'name' | 'score_desc' | 'score_asc' | 'date_desc';
+  const [filterMode, setFilterMode] = useState<Record<string, FilterMode>>({});
+  const [sortMode, setSortMode] = useState<Record<string, SortMode>>({});
+
+  const getFilteredSorted = (examId: string, users: ExamUserStatus[]) => {
+    const filter = filterMode[examId] ?? 'all';
+    const sort = sortMode[examId] ?? 'name';
+    let result = [...users];
+    if (filter === 'submitted') result = result.filter((u) => u.submitted);
+    if (filter === 'not_submitted') result = result.filter((u) => !u.submitted);
+    result.sort((a, b) => {
+      if (sort === 'name') return a.userName.localeCompare(b.userName, 'ko', { numeric: true });
+      if (sort === 'score_desc') return (b.submission?.score ?? -1) - (a.submission?.score ?? -1);
+      if (sort === 'score_asc') return (a.submission?.score ?? 101) - (b.submission?.score ?? 101);
+      if (sort === 'date_desc') {
+        const da = a.submission ? new Date(a.submission.submittedAt).getTime() : 0;
+        const db = b.submission ? new Date(b.submission.submittedAt).getTime() : 0;
+        return db - da;
+      }
+      return 0;
+    });
+    return result;
+  };
 
   // 배정 문제 모달
   const [assignmentModal, setAssignmentModal] = useState<{
@@ -72,6 +99,30 @@ export default function AdminResultsPage() {
     } finally {
       setLoadingExamId(null);
     }
+  };
+
+  const exportToExcel = (examTitle: string, status: ExamSubmissionStatus) => {
+    const rows = status.users.map((u) => ({
+      이름: u.userName,
+      이메일: u.userEmail,
+      응시여부: u.submitted ? '응시' : '미응시',
+      점수: u.submitted && u.submission?.score !== null ? u.submission?.score : '',
+      정답수: u.submitted && u.submission
+        ? Math.round(((u.submission.score ?? 0) / 100) * u.submission.totalQuestions)
+        : '',
+      총문항: u.submitted && u.submission ? u.submission.totalQuestions : '',
+      응시일시: u.submitted && u.submission
+        ? new Date(u.submission.submittedAt).toLocaleString('ko-KR')
+        : '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 24 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 18 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '응시결과');
+    XLSX.writeFile(wb, `${examTitle}_응시결과.xlsx`);
   };
 
   const handleReset = async () => {
@@ -191,7 +242,7 @@ export default function AdminResultsPage() {
                             </span>
                           </div>
                           {status.users.filter((u) => u.submitted).length > 0 && (
-                            <div className="ml-auto text-xs text-[var(--text-muted)]">
+                            <div className="text-xs text-[var(--text-muted)]">
                               평균{' '}
                               <span className="font-semibold text-[var(--text-primary)]">
                                 {Math.round(
@@ -204,11 +255,50 @@ export default function AdminResultsPage() {
                               점
                             </div>
                           )}
+                          <button
+                            onClick={() => exportToExcel(exam.title, status)}
+                            className="ml-auto flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
+                            </svg>
+                            엑셀 저장
+                          </button>
+                        </div>
+
+                        {/* 필터/정렬 바 */}
+                        <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-5 py-2">
+                          <div className="flex gap-1">
+                            {(['all', 'submitted', 'not_submitted'] as const).map((f) => (
+                              <button
+                                key={f}
+                                onClick={() => setFilterMode((prev) => ({ ...prev, [exam.id]: f }))}
+                                className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                                  (filterMode[exam.id] ?? 'all') === f
+                                    ? 'bg-[#5e6ad2] text-white'
+                                    : 'bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                                }`}
+                              >
+                                {f === 'all' ? '전체' : f === 'submitted' ? '응시' : '미응시'}
+                              </button>
+                            ))}
+                          </div>
+                          <select
+                            value={sortMode[exam.id] ?? 'name'}
+                            onChange={(e) => setSortMode((prev) => ({ ...prev, [exam.id]: e.target.value as SortMode }))}
+                            className="ml-auto h-6 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 text-[11px] text-[var(--text-secondary)] focus:outline-none"
+                          >
+                            <option value="name">이름순</option>
+                            <option value="score_desc">점수 높은순</option>
+                            <option value="score_asc">점수 낮은순</option>
+                            <option value="date_desc">최근 응시순</option>
+                          </select>
                         </div>
 
                         {/* 사용자별 행 */}
                         <div className="divide-y divide-[var(--border-subtle)]">
-                          {status.users.map((userStatus: ExamUserStatus) => (
+                          {getFilteredSorted(exam.id, status.users).map((userStatus: ExamUserStatus) => (
                             <div
                               key={userStatus.userId}
                               className="flex items-center justify-between px-5 py-3.5"

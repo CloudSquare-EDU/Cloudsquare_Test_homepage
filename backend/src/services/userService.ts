@@ -86,6 +86,31 @@ export const bulkCreateUsers = async (
   return { success, failed };
 };
 
+// 관리자가 특정 사용자 비밀번호 초기화
+export const resetUserPassword = async (userId: string, newPassword: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+};
+
+// 본인이 직접 비밀번호 변경 (현재 비밀번호 확인 필요)
+export const changeMyPassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
+
+  const isMatch = await bcrypt.compare(currentPassword, user.password);
+  if (!isMatch) throw new AppError(400, ErrorCode.BAD_REQUEST, '현재 비밀번호가 올바르지 않습니다.');
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+};
+
 // 사용자 삭제
 export const deleteUser = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });

@@ -13,6 +13,8 @@ const createExamSchema = z.object({
   duration: z.number().int().min(0, '제한 시간은 0 이상이어야 합니다.'),
   questionBankId: z.string().optional(),
   questionCount: z.number().int().positive().optional(),
+  startDate: z.string().datetime().nullable().optional(),
+  deadline: z.string().datetime().nullable().optional(),
 });
 
 const updateExamSchema = z.object({
@@ -21,6 +23,8 @@ const updateExamSchema = z.object({
   duration: z.number().int().min(0).optional(),
   questionBankId: z.string().nullable().optional(),
   questionCount: z.number().int().positive().nullable().optional(),
+  startDate: z.string().datetime().nullable().optional(),
+  deadline: z.string().datetime().nullable().optional(),
 });
 
 // GET /exams/my — 사용자 시험 목록 + 응시 상태 통합 반환 (홈 화면 단일 호출용)
@@ -120,7 +124,11 @@ export const createExam = async (
 ): Promise<void> => {
   try {
     const input = createExamSchema.parse(req.body);
-    const exam = await examService.createExam(input);
+    const exam = await examService.createExam({
+      ...input,
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      deadline: input.deadline ? new Date(input.deadline) : null,
+    });
     res.status(201).json({ success: true, data: exam });
   } catch (err) {
     next(err);
@@ -134,7 +142,11 @@ export const updateExam = async (
 ): Promise<void> => {
   try {
     const input = updateExamSchema.parse(req.body);
-    const exam = await examService.updateExam(req.params.id, input);
+    const exam = await examService.updateExam(req.params.id, {
+      ...input,
+      startDate: input.startDate !== undefined ? (input.startDate ? new Date(input.startDate) : null) : undefined,
+      deadline: input.deadline !== undefined ? (input.deadline ? new Date(input.deadline) : null) : undefined,
+    });
     res.json({ success: true, data: exam });
   } catch (err) {
     next(err);

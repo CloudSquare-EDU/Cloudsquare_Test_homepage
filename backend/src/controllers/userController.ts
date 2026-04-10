@@ -95,6 +95,44 @@ export const bulkCreateUsers = async (
   }
 };
 
+// 관리자가 특정 사용자 비밀번호 초기화
+export const resetUserPassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const schema = z.object({
+      password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다.'),
+    });
+    const { password } = schema.parse(req.body);
+    await userService.resetUserPassword(req.params.id, password);
+    res.json({ success: true, data: { message: '비밀번호가 초기화되었습니다.' } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// 본인 비밀번호 변경
+export const changeMyPassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const schema = z.object({
+      currentPassword: z.string().min(1, '현재 비밀번호를 입력해주세요.'),
+      newPassword: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다.'),
+    });
+    const { currentPassword, newPassword } = schema.parse(req.body);
+    if (!req.user?.userId) throw new AppError(401, ErrorCode.UNAUTHORIZED, '인증이 필요합니다.');
+    await userService.changeMyPassword(req.user.userId, currentPassword, newPassword);
+    res.json({ success: true, data: { message: '비밀번호가 변경되었습니다.' } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const deleteUser = async (
   req: AuthRequest,
   res: Response,

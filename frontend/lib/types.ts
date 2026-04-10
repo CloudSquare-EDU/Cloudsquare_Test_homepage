@@ -25,6 +25,8 @@ export interface ExamSummary {
   duration: number;
   questionCount: number | null;
   isPublished?: boolean;
+  startDate?: string | null;
+  deadline?: string | null;
   createdAt: string;
   course?: { id: string; name: string } | null;
 }

@@ -12,6 +12,8 @@ interface CreateExamInput {
   duration: number;
   questionBankId?: string;
   questionCount?: number;
+  startDate?: Date | null;
+  deadline?: Date | null;
 }
 
 interface UpdateExamInput {
@@ -20,6 +22,8 @@ interface UpdateExamInput {
   duration?: number;
   questionBankId?: string | null;
   questionCount?: number | null;
+  startDate?: Date | null;
+  deadline?: Date | null;
 }
 
 // 해당 사용자에게 할당된 시험 목록 조회 (USER용)
@@ -65,14 +69,18 @@ export const getAssignedExamsForUser = async (userId: string) => {
 
   const toDto = (exam: {
     id: string; title: string; description: string | null; duration: number;
-    createdAt: Date; _count: { questions: number };
+    createdAt: Date; startDate: Date | null; deadline: Date | null;
+    _count: { questions: number };
     course: { id: string; name: string } | null;
+    questionCount?: number | null;
   }) => ({
     id: exam.id,
     title: exam.title,
     description: exam.description,
     duration: exam.duration,
-    questionCount: exam._count.questions,
+    questionCount: exam.questionCount ?? exam._count.questions,
+    startDate: exam.startDate,
+    deadline: exam.deadline,
     createdAt: exam.createdAt,
     course: exam.course,
   });
@@ -137,6 +145,14 @@ export const getExamById = async (id: string, userId?: string) => {
     throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
   }
 
+  // 시작일/마감일 체크 (userId가 있을 때만 — 관리자는 제외)
+  if (userId && exam.startDate && new Date() < exam.startDate) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, '아직 응시 시작 전인 시험입니다.');
+  }
+  if (userId && exam.deadline && new Date() > exam.deadline) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, '응시 기간이 종료된 시험입니다.');
+  }
+
   // 문제은행 기반 시험: userId가 있으면 배정 문제 로드
   if (exam.questionBankId && userId) {
     const { getOrCreateAssignment } = await import('./userExamAssignmentService');
@@ -150,6 +166,8 @@ export const getExamById = async (id: string, userId?: string) => {
       courseId: exam.courseId,
       questionBankId: exam.questionBankId,
       questionCount: exam.questionCount,
+      startDate: exam.startDate,
+      deadline: exam.deadline,
       questionBank: exam.questionBank,
       questions: assignedQuestions ?? [],
       isBankBased: true,
@@ -159,6 +177,8 @@ export const getExamById = async (id: string, userId?: string) => {
   // 수동 문제 시험 (기존 방식)
   return {
     ...exam,
+    startDate: exam.startDate,
+    deadline: exam.deadline,
     isBankBased: false,
     questions: exam.questions.map((q) => ({
       ...q,
@@ -177,6 +197,8 @@ export const createExam = async (input: CreateExamInput) => {
       duration: input.duration,
       questionBankId: input.questionBankId ?? null,
       questionCount: input.questionCount ?? null,
+      startDate: input.startDate ?? null,
+      deadline: input.deadline ?? null,
     },
   });
 };

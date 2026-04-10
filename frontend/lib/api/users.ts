@@ -49,6 +49,14 @@ export const usersApi = {
   updateRole: (userId: string, role: 'USER' | 'ADMIN') =>
     apiClient.patch<UserSummary>(`/users/${userId}/role`, { role }),
 
+  // 관리자가 특정 사용자 비밀번호 초기화
+  resetPassword: (userId: string, password: string) =>
+    apiClient.patch(`/users/${userId}/password`, { password }),
+
+  // 본인 비밀번호 변경
+  changeMyPassword: (currentPassword: string, newPassword: string) =>
+    apiClient.patch('/users/me/password', { currentPassword, newPassword }),
+
   // 사용자 삭제
   delete: (userId: string) => apiClient.delete(`/users/${userId}`),
 

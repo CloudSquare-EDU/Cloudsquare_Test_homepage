@@ -19,5 +19,11 @@ userRoutes.post('/bulk', authenticate, requireAdmin, userController.bulkCreateUs
 // PATCH /users/:id/role — role 변경 (USER ↔ ADMIN)
 userRoutes.patch('/:id/role', authenticate, requireAdmin, userController.updateUserRole);
 
+// PATCH /users/:id/password — 관리자가 특정 사용자 비밀번호 초기화
+userRoutes.patch('/:id/password', authenticate, requireAdmin, userController.resetUserPassword);
+
+// PATCH /users/me/password — 본인 비밀번호 변경 (인증 사용자)
+userRoutes.patch('/me/password', authenticate, userController.changeMyPassword);
+
 // DELETE /users/:id — 사용자 삭제
 userRoutes.delete('/:id', authenticate, requireAdmin, userController.deleteUser);

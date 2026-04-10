@@ -83,13 +83,17 @@ export default function HomePage() {
           {exams.map((exam) => {
             const submission = exam.submission;
             const done = !!submission;
+            const now = new Date();
+            const isNotStarted = !done && !!exam.startDate && new Date(exam.startDate) > now;
+            const isExpired = !done && !isNotStarted && !!exam.deadline && new Date(exam.deadline) < now;
+            const isUnavailable = isNotStarted || isExpired;
 
             return (
               <div
                 key={exam.id}
                 className={`
                   flex items-center gap-4 rounded-lg border px-5 py-4 transition-colors
-                  ${done
+                  ${done || isUnavailable
                     ? 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
                     : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-raised)]'
                   }
@@ -98,22 +102,37 @@ export default function HomePage() {
                 {/* 상태 아이콘 */}
                 <div className={`
                   flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm
-                  ${done ? 'bg-[var(--success-bg)] text-[var(--success-text)]' : 'bg-[var(--bg-raised)] text-[var(--text-secondary)]'}
+                  ${done ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+                    : isExpired ? 'bg-[var(--danger-bg)] text-[var(--danger-text)]'
+                    : isNotStarted ? 'bg-[rgba(94,106,210,0.1)] text-[#5e6ad2]'
+                    : 'bg-[var(--bg-raised)] text-[var(--text-secondary)]'}
                 `}>
-                  {done ? '✓' : '📝'}
+                  {done ? '✓' : isExpired ? '✕' : isNotStarted ? '🔒' : '📝'}
                 </div>
 
                 {/* 시험 정보 */}
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium truncate ${done ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
+                  <p className={`font-medium truncate ${done || isUnavailable ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
                     {exam.title}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--text-muted)]">
                     <span>{exam.questionCount != null ? `${exam.questionCount}문제` : '문제수 미정'}</span>
                     <span>⏱ {formatDuration(exam.duration)}</span>
+                    {exam.startDate && !done && (
+                      <span className={isNotStarted ? 'text-[#5e6ad2]' : 'text-[var(--text-faint)]'}>
+                        {isNotStarted
+                          ? `응시 시작: ${new Date(exam.startDate).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                          : `시작 ${new Date(exam.startDate).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}`}
+                      </span>
+                    )}
+                    {exam.deadline && !done && (
+                      <span className={isExpired ? 'text-[var(--danger-text)]' : 'text-[var(--warning-text)]'}>
+                        {isExpired ? '마감됨' : `마감 ${new Date(exam.deadline).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                      </span>
+                    )}
                     {done && (
-                      <span className="text-green-500">
-                        {new Date(submission.submittedAt).toLocaleDateString('ko-KR')} 응시
+                      <span className="text-[var(--success-text)]">
+                        {new Date(submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} 응시완료
                       </span>
                     )}
                   </div>
@@ -135,6 +154,10 @@ export default function HomePage() {
                         <Button variant="ghost" size="sm">결과 보기</Button>
                       </Link>
                     </>
+                  ) : isExpired ? (
+                    <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">기간 만료</span>
+                  ) : isNotStarted ? (
+                    <span className="rounded px-2 py-0.5 text-xs bg-[rgba(94,106,210,0.1)] text-[#5e6ad2] border border-[rgba(94,106,210,0.2)]">응시 대기 중</span>
                   ) : (
                     <Link href={`/exams/${exam.id}`}>
                       <Button size="sm">응시하기</Button>

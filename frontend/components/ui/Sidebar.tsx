@@ -6,6 +6,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
+import { usersApi } from '@/lib/api/users';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { ApiError } from '@/lib/api/client';
 import { useTheme } from '@/components/ui/ThemeProvider';
 
 // ─── Icons ───────────────────────────────────────────────────
@@ -193,6 +197,35 @@ export const Sidebar = () => {
   const [showPalette, setShowPalette] = useState(false);
   const [gPending, setGPending] = useState(false);
 
+  // 비밀번호 변경 모달
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [isChangingPw, setIsChangingPw] = useState(false);
+
+  const openPwModal = () => {
+    setCurrentPw(''); setNewPw(''); setConfirmPw('');
+    setPwError(null); setPwSuccess(false);
+    setShowPwModal(true);
+  };
+
+  const handleChangePw = async () => {
+    if (newPw.length < 8) { setPwError('새 비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (newPw !== confirmPw) { setPwError('새 비밀번호가 일치하지 않습니다.'); return; }
+    setIsChangingPw(true); setPwError(null);
+    try {
+      await usersApi.changeMyPassword(currentPw, newPw);
+      setPwSuccess(true);
+    } catch (err) {
+      setPwError(err instanceof ApiError ? err.message : '비밀번호 변경 중 오류가 발생했습니다.');
+    } finally {
+      setIsChangingPw(false);
+    }
+  };
+
   const navItems = user?.role === 'ADMIN' ? ADMIN_NAV : USER_NAV;
 
   const isActive = (item: NavItem) => {
@@ -312,14 +345,20 @@ export const Sidebar = () => {
         {/* User info + controls */}
         <div className="border-t border-[var(--border-subtle)] px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[var(--text-secondary)]">
+            <button
+              onClick={openPwModal}
+              title="비밀번호 변경"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[var(--text-secondary)] hover:ring-2 hover:ring-[#5e6ad2]/40 transition-all"
+            >
               {initials}
-            </div>
+            </button>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-xs font-medium text-[var(--text-primary)]">{user.name}</p>
-              <p className="text-[10px] text-[var(--text-muted)]">
-                {user.role === 'ADMIN' ? '관리자' : '일반 사용자'}
-              </p>
+              <button onClick={openPwModal} className="w-full text-left" title="비밀번호 변경">
+                <p className="truncate text-xs font-medium text-[var(--text-primary)] hover:text-[#5e6ad2] transition-colors">{user.name}</p>
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  {user.role === 'ADMIN' ? '관리자' : '일반 사용자'}
+                </p>
+              </button>
             </div>
             {/* 다크/라이트 토글 */}
             <button
@@ -328,13 +367,11 @@ export const Sidebar = () => {
               className="shrink-0 rounded p-1 text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-secondary)] transition-colors"
             >
               {theme === 'dark' ? (
-                /* Sun icon */
                 <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <circle cx="8" cy="8" r="3" />
                   <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.22 3.22l1.42 1.42M11.36 11.36l1.42 1.42M3.22 12.78l1.42-1.42M11.36 4.64l1.42-1.42" strokeLinecap="round" />
                 </svg>
               ) : (
-                /* Moon icon (Bootstrap Icons moon-fill) */
                 <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
                 </svg>
@@ -350,6 +387,51 @@ export const Sidebar = () => {
           </div>
         </div>
       </aside>
+
+      {/* 비밀번호 변경 모달 */}
+      {showPwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowPwModal(false)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            <div className="border-b border-[var(--border-subtle)] px-5 py-4">
+              <p className="font-semibold text-[var(--text-primary)]">비밀번호 변경</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">{user.name}</p>
+            </div>
+            {pwSuccess ? (
+              <div className="px-5 py-6 text-center">
+                <p className="text-sm font-medium text-[var(--success-text)]">비밀번호가 변경되었습니다.</p>
+                <button
+                  onClick={() => setShowPwModal(false)}
+                  className="mt-4 rounded-md bg-[#5e6ad2] px-4 py-1.5 text-sm text-white hover:bg-[#4f5ab8]"
+                >
+                  닫기
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3 px-5 py-4">
+                  <Input label="현재 비밀번호" type="password" value={currentPw}
+                    onChange={(e) => { setCurrentPw(e.target.value); setPwError(null); }}
+                    placeholder="현재 비밀번호" autoFocus />
+                  <Input label="새 비밀번호 (8자 이상)" type="password" value={newPw}
+                    onChange={(e) => { setNewPw(e.target.value); setPwError(null); }}
+                    placeholder="새 비밀번호" />
+                  <Input label="새 비밀번호 확인" type="password" value={confirmPw}
+                    onChange={(e) => { setConfirmPw(e.target.value); setPwError(null); }}
+                    placeholder="새 비밀번호 재입력" />
+                  {pwError && <p className="text-xs text-[var(--danger-text)]">{pwError}</p>}
+                </div>
+                <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-3">
+                  <Button variant="ghost" size="sm" onClick={() => setShowPwModal(false)}>취소</Button>
+                  <Button variant="primary" size="sm" onClick={handleChangePw} disabled={isChangingPw}>
+                    {isChangingPw ? '변경 중...' : '변경'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <CommandPalette
         isOpen={showPalette}

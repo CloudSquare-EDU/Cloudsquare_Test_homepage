@@ -20,6 +20,8 @@ export const examsApi = {
     duration: number;
     questionBankId?: string;
     questionCount?: number;
+    startDate?: string | null;
+    deadline?: string | null;
   }) => apiClient.post<ExamDetail>('/exams', data),
 
   update: (id: string, data: {
@@ -28,6 +30,8 @@ export const examsApi = {
     duration?: number;
     questionBankId?: string;
     questionCount?: number;
+    startDate?: string | null;
+    deadline?: string | null;
   }) => apiClient.patch<ExamDetail>(`/exams/${id}`, data),
 
   delete: (id: string) => apiClient.delete<{ message: string }>(`/exams/${id}`),

@@ -53,6 +53,48 @@ export default function AdminUsersPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 다중 선택 삭제
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const selectableIds = users.filter((u) => u.role !== 'ADMIN').map((u) => u.id);
+    if (selectableIds.every((id) => selectedIds.has(id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableIds));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => usersApi.delete(id)));
+      setSelectedIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '일괄 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // 비밀번호 초기화 모달
+  const [pwResetTarget, setPwResetTarget] = useState<UserSummary | null>(null);
+  const [pwResetValue, setPwResetValue] = useState('');
+  const [pwResetError, setPwResetError] = useState<string | null>(null);
+  const [isResettingPw, setIsResettingPw] = useState(false);
+
   // 과정 배정 모달
   const [courseTarget, setCourseTarget] = useState<UserSummary | null>(null);
   const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
@@ -172,6 +214,22 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handlePwReset = async () => {
+    if (!pwResetTarget) return;
+    if (pwResetValue.length < 8) { setPwResetError('비밀번호는 8자 이상이어야 합니다.'); return; }
+    setIsResettingPw(true);
+    setPwResetError(null);
+    try {
+      await usersApi.resetPassword(pwResetTarget.id, pwResetValue);
+      setPwResetTarget(null);
+      setPwResetValue('');
+    } catch (err) {
+      setPwResetError(err instanceof ApiError ? err.message : '비밀번호 초기화 중 오류가 발생했습니다.');
+    } finally {
+      setIsResettingPw(false);
+    }
+  };
+
   // ── 과정 배정 ───────────────────────────────────────────────
   const openCourseModal = async (user: UserSummary) => {
     setCourseTarget(user);
@@ -233,6 +291,15 @@ export default function AdminUsersPage() {
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">계정 생성 및 시험/과정 할당을 관리하세요</p>
         </div>
         <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowBulkDeleteConfirm(true)}
+            >
+              선택 삭제 ({selectedIds.size}명)
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -388,11 +455,46 @@ export default function AdminUsersPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {users.map((user) => (
+          {/* 전체 선택 헤더 */}
+          {users.some((u) => u.role !== 'ADMIN') && (
+            <div className="flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-inset)] px-4 py-2">
+              <input
+                type="checkbox"
+                checked={users.filter((u) => u.role !== 'ADMIN').every((u) => selectedIds.has(u.id)) && selectedIds.size > 0}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 cursor-pointer accent-[#5e6ad2]"
+              />
+              <span className="text-xs text-[var(--text-muted)]">
+                {selectedIds.size > 0 ? `${selectedIds.size}명 선택됨` : '전체 선택 (관리자 제외)'}
+              </span>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-auto text-xs text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
+                >
+                  선택 해제
+                </button>
+              )}
+            </div>
+          )}
+          {users.map((user) => {
+            const isSelected = selectedIds.has(user.id);
+            const isAdmin = user.role === 'ADMIN';
+            return (
             <div
               key={user.id}
-              className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
+              className={`flex items-center gap-4 rounded-lg border bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors ${
+                isSelected ? 'border-[#5e6ad2]/50 bg-[rgba(94,106,210,0.04)]' : 'border-[var(--border)]'
+              }`}
             >
+              {/* 체크박스 */}
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={isAdmin}
+                onChange={() => !isAdmin && toggleSelect(user.id)}
+                className="h-4 w-4 cursor-pointer accent-[#5e6ad2] disabled:cursor-not-allowed disabled:opacity-30"
+              />
               {/* 아바타 */}
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-sm font-semibold text-[#5e6ad2]">
                 {user.name.charAt(0)}
@@ -428,6 +530,9 @@ export default function AdminUsersPage() {
                 <Button variant="secondary" size="sm" onClick={() => openCourseModal(user)}>
                   과정 배정
                 </Button>
+                <Button variant="ghost" size="sm" onClick={() => { setPwResetTarget(user); setPwResetValue(''); setPwResetError(null); }}>
+                  비번 초기화
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => handleRoleChange(user.id, user.role)}>
                   {user.role === 'USER' ? '관리자로' : '일반으로'}
                 </Button>
@@ -436,11 +541,12 @@ export default function AdminUsersPage() {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* 삭제 확인 모달 */}
+      {/* 단일 삭제 확인 모달 */}
       <Modal
         isOpen={!!deleteTargetId}
         title="사용자를 삭제하시겠습니까?"
@@ -451,6 +557,50 @@ export default function AdminUsersPage() {
         onCancel={() => setDeleteTargetId(null)}
         isLoading={isDeleting}
       />
+
+      {/* 일괄 삭제 확인 모달 */}
+      <Modal
+        isOpen={showBulkDeleteConfirm}
+        title={`${selectedIds.size}명을 삭제하시겠습니까?`}
+        message="선택한 사용자와 모든 응시 기록이 삭제됩니다. 이 작업은 복구할 수 없습니다."
+        confirmLabel={`${selectedIds.size}명 삭제`}
+        variant="danger"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        isLoading={isBulkDeleting}
+      />
+
+      {/* ── 비밀번호 초기화 모달 ── */}
+      {pwResetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setPwResetTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            <div className="border-b border-[var(--border-subtle)] px-5 py-4">
+              <p className="font-semibold text-[var(--text-primary)]">비밀번호 초기화</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">{pwResetTarget.name} ({pwResetTarget.email})</p>
+            </div>
+            <div className="px-5 py-4">
+              <Input
+                label="새 비밀번호 (8자 이상)"
+                type="password"
+                value={pwResetValue}
+                onChange={(e) => { setPwResetValue(e.target.value); setPwResetError(null); }}
+                placeholder="새 비밀번호 입력"
+                autoFocus
+              />
+              {pwResetError && (
+                <p className="mt-1.5 text-xs text-[var(--danger-text)]">{pwResetError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-3">
+              <Button variant="ghost" size="sm" onClick={() => setPwResetTarget(null)}>취소</Button>
+              <Button variant="primary" size="sm" onClick={handlePwReset} disabled={isResettingPw}>
+                {isResettingPw ? '처리 중...' : '초기화'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 과정 배정 모달 ── */}
       {courseTarget && (
