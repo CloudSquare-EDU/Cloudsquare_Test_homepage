@@ -15,6 +15,7 @@ interface AuthState {
   setAuth: (user: User, token: string) => void;
   clearAuth: () => void;
   initialize: () => void;
+  updateUser: (partial: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -29,6 +30,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('user', JSON.stringify(user));
     }
     set({ user, accessToken: token });
+  },
+
+  // 사용자 정보 부분 업데이트 (예: mustChangePassword 해제)
+  updateUser: (partial) => {
+    set((state) => {
+      if (!state.user) return {};
+      const updated = { ...state.user, ...partial };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(updated));
+      }
+      return { user: updated };
+    });
   },
 
   // 로그아웃 시 호출

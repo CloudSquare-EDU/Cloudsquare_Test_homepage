@@ -110,14 +110,15 @@ model UserExamQuestion {
 // User — 사용자 계정
 // ─────────────────────────────────────────
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(USER)
-  courseId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  password           String
+  name               String
+  role               Role     @default(USER)
+  courseId           String?
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   course            Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
   submissions       Submission[]
@@ -260,7 +261,5 @@ model Answer {
   bankChoice   BankChoice?   @relation(fields: [bankChoiceId], references: [id])
 
   @@index([submissionId])
-  @@index([bankQuestionId])
-  @@index([questionId])
   @@map("answers")
 }

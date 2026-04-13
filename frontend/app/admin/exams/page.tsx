@@ -32,6 +32,36 @@ export default function AdminExamsPage() {
   const [courseTarget, setCourseTarget] = useState<AdminExam | null>(null);
   const [isAssigningCourse, setIsAssigningCourse] = useState(false);
 
+  // 기간 설정 모달
+  const [dateTarget, setDateTarget] = useState<AdminExam | null>(null);
+  const [dateForm, setDateForm] = useState({ startDate: '', deadline: '' });
+  const [isSavingDate, setIsSavingDate] = useState(false);
+
+  const openDateModal = (exam: AdminExam) => {
+    setDateTarget(exam);
+    setDateForm({
+      startDate: exam.startDate ? new Date(exam.startDate).toISOString().slice(0, 16) : '',
+      deadline: exam.deadline ? new Date(exam.deadline).toISOString().slice(0, 16) : '',
+    });
+  };
+
+  const handleSaveDates = async () => {
+    if (!dateTarget) return;
+    setIsSavingDate(true);
+    try {
+      await examsApi.update(dateTarget.id, {
+        startDate: dateForm.startDate ? new Date(dateForm.startDate).toISOString() : null,
+        deadline: dateForm.deadline ? new Date(dateForm.deadline).toISOString() : null,
+      });
+      setDateTarget(null);
+      loadExams();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '기간 설정 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
   const loadExams = () => {
     examsApi.getAllAdmin()
       .then(setExams)
@@ -141,14 +171,14 @@ export default function AdminExamsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">시험 관리</h1>
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             시험 생성 시 과정을 매핑하거나, 목록에서 과정을 변경할 수 있습니다
           </p>
         </div>
-        <Button onClick={() => setShowCreate((v) => !v)} size="sm">
+        <Button onClick={() => setShowCreate((v) => !v)} size="sm" className="whitespace-nowrap self-start">
           {showCreate ? '취소' : '+ 시험 생성'}
         </Button>
       </div>
@@ -292,66 +322,68 @@ export default function AdminExamsPage() {
           {exams.map((exam) => (
             <div
               key={exam.id}
-              className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
+              className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-4 py-4 hover:border-[var(--border-hover)] transition-colors sm:px-5 flex flex-col md:flex-row md:items-center md:gap-3"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
-                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
-                  <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-medium text-[var(--text-primary)] truncate">{exam.title}</p>
-                  {/* 문제은행 배지 */}
-                  {exam.questionBank && (
-                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(110,180,110,0.12)] text-[#4a9e5c] border border-[rgba(110,180,110,0.25)]">
-                      🏦 {exam.questionBank.name}
-                    </span>
-                  )}
-                  {/* 과정 배지 */}
-                  {exam.course && (
-                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
-                      {exam.course.name}
-                    </span>
-                  )}
-                  {/* 공개 상태 */}
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    exam.isPublished
-                      ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
-                      : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
-                  }`}>
-                    {exam.isPublished ? '공개' : '비공개'}
-                  </span>
+              {/* 시험 정보 */}
+              <div className="flex flex-1 min-w-0 items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
+                    <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
+                  </svg>
                 </div>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                  {exam.questionBank
-                    ? <span>문제은행 {exam.questionBank._count.questions}개 중 {exam.questionCount ?? '전체'}개 출제</span>
-                    : <span>문제 {exam._count.questions}개</span>
-                  }
-                  <span>·</span>
-                  <span>응시 {exam._count.submissions}회</span>
-                  <span>·</span>
-                  <span>{formatDuration(exam.duration)}</span>
-                  {exam.startDate && (
-                    <>
-                      <span>·</span>
+                <div className="min-w-0 flex-1">
+                  {/* 제목 + 배지 */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="font-medium text-[var(--text-primary)] break-all">{exam.title}</p>
+                    {exam.questionBank && (
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(110,180,110,0.12)] text-[#4a9e5c] border border-[rgba(110,180,110,0.25)]">
+                        🏦 {exam.questionBank.name}
+                      </span>
+                    )}
+                    {exam.course && (
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                        {exam.course.name}
+                      </span>
+                    )}
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      exam.isPublished
+                        ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+                        : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                    }`}>
+                      {exam.isPublished ? '공개' : '비공개'}
+                    </span>
+                  </div>
+                  {/* 메타 정보 — 모바일에선 줄바꿈 허용 */}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">
+                    <span>
+                      {exam.questionBank
+                        ? `문제은행 ${exam.questionBank._count.questions}개 중 ${exam.questionCount ?? '전체'}개`
+                        : `문제 ${exam._count.questions}개`}
+                    </span>
+                    <span className="text-[var(--border)]">·</span>
+                    <span>응시 {exam._count.submissions}회</span>
+                    <span className="text-[var(--border)]">·</span>
+                    <span>{formatDuration(exam.duration)}</span>
+                    {exam.startDate && (
                       <span className={new Date(exam.startDate) > new Date() ? 'text-[#5e6ad2]' : 'text-[var(--text-faint)]'}>
                         시작 {new Date(exam.startDate).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                    </>
-                  )}
-                  {exam.deadline && (
-                    <>
-                      <span>·</span>
+                    )}
+                    {exam.deadline && (
                       <span className={new Date(exam.deadline) < new Date() ? 'text-[var(--danger-text)]' : 'text-[var(--warning-text)]'}>
                         마감 {new Date(exam.deadline).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+
+              {/* 액션 버튼: 모바일-하단분리 / 데스크탑-우측인라인 */}
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => openDateModal(exam)}>
+                  기간 설정
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setCourseTarget(exam)}>
                   과정 변경
                 </Button>
@@ -377,6 +409,43 @@ export default function AdminExamsPage() {
         onCancel={() => setDeleteTargetId(null)}
         isLoading={isDeleting}
       />
+
+      {/* ── 기간 설정 모달 ── */}
+      {dateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDateTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">응시 기간 설정</h2>
+            <p className="mb-4 text-sm text-[var(--text-muted)] truncate">{dateTarget.title}</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">응시 시작일 (선택)</label>
+                <input
+                  type="datetime-local"
+                  value={dateForm.startDate}
+                  onChange={(e) => setDateForm({ ...dateForm, startDate: e.target.value })}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+                />
+                <p className="text-[10px] text-[var(--text-faint)]">비우면 즉시 응시 가능</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">응시 마감일 (선택)</label>
+                <input
+                  type="datetime-local"
+                  value={dateForm.deadline}
+                  onChange={(e) => setDateForm({ ...dateForm, deadline: e.target.value })}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+                />
+                <p className="text-[10px] text-[var(--text-faint)]">비우면 기한 없음</p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setDateTarget(null)}>취소</Button>
+              <Button size="sm" onClick={handleSaveDates} isLoading={isSavingDate}>저장</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 과정 변경 모달 ── */}
       {courseTarget && (

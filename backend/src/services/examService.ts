@@ -269,5 +269,19 @@ export const publishExam = async (id: string) => {
     throw new AppError(400, ErrorCode.BAD_REQUEST, '문제가 없는 시험은 공개할 수 없습니다.');
   }
 
-  return prisma.exam.update({ where: { id }, data: { isPublished: true } });
+  return prisma.exam.update({
+    where: { id },
+    data: { isPublished: true },
+  });
+};
+
+// 시험 비공개 처리 (ADMIN)
+export const unpublishExam = async (id: string) => {
+  const exam = await prisma.exam.findUnique({ where: { id } });
+  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
+
+  return prisma.exam.update({
+    where: { id },
+    data: { isPublished: false },
+  });
 };

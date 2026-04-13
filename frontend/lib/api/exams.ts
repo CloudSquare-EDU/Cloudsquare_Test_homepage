@@ -36,5 +36,11 @@ export const examsApi = {
 
   delete: (id: string) => apiClient.delete<{ message: string }>(`/exams/${id}`),
 
+
   publish: (id: string) => apiClient.patch<ExamDetail>(`/exams/${id}/publish`, {}),
+
+  unpublish: (id: string) => apiClient.patch<ExamDetail>(`/exams/${id}/unpublish`, {}),
+
+  assignUsers: (examId: string, userIds: string[]) =>
+    apiClient.post(`/exams/${examId}/users/bulk`, { userIds }),
 };

@@ -190,7 +190,11 @@ const CommandPalette = ({ isOpen, onClose, navItems, onLogout }: CommandPaletteP
 
 // ─── Sidebar ─────────────────────────────────────────────────
 
-export const Sidebar = () => {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+export const Sidebar = ({ onClose }: SidebarProps) => {
   const { user, clearAuth } = useAuthStore();
   const pathname = usePathname();
   const router = useRouter();
@@ -286,7 +290,7 @@ export const Sidebar = () => {
 
   return (
     <>
-      <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--sidebar-bg)]">
+      <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--sidebar-bg)] md:w-[220px]">
         {/* Logo + Cmd+K */}
         <div className="flex items-center justify-between px-4 py-3.5">
           <div className="flex items-center gap-2">
@@ -322,6 +326,7 @@ export const Sidebar = () => {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={onClose}
                 className={`
                   group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors
                   ${active
@@ -432,13 +437,6 @@ export const Sidebar = () => {
           </div>
         </div>
       )}
-
-      <CommandPalette
-        isOpen={showPalette}
-        onClose={() => setShowPalette(false)}
-        navItems={navItems}
-        onLogout={handleLogout}
-      />
     </>
   );
-};
+}

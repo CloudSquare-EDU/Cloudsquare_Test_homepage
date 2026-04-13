@@ -685,16 +685,17 @@ export default function QuestionBanksPage() {
               </div>
             </div>
 
-            {/* 푸터 */}
-            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-3">
+            {/* 저장 버튼 */}
+            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">
               <Button variant="ghost" size="sm" onClick={() => setEditingQuestion(null)}>취소</Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleSaveQuestion}
-                disabled={isSavingQuestion || !editingQuestion.content.trim() || !editingQuestion.choices.some((c) => c.isCorrect)}
+                disabled={isSavingQuestion || !editingQuestion.choices.some((c) => c.isCorrect)}
+                isLoading={isSavingQuestion}
               >
-                {isSavingQuestion ? '저장 중...' : '저장'}
+                저장
               </Button>
             </div>
           </div>

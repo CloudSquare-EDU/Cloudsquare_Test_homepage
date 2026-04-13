@@ -27,6 +27,7 @@ export const getAllUsers = async () => {
       name: true,
       role: true,
       courseId: true,
+      mustChangePassword: true,
       createdAt: true,
       course: { select: { id: true, name: true } },
       _count: { select: { submissions: true, userExams: true } },
@@ -46,8 +47,8 @@ export const createUser = async (input: CreateUserInput) => {
   const hashedPassword = await bcrypt.hash(password, 12);
 
   return prisma.user.create({
-    data: { email, password: hashedPassword, name, role },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    data: { email, password: hashedPassword, name, role, mustChangePassword: true },
+    select: { id: true, email: true, name: true, role: true, mustChangePassword: true, createdAt: true },
   });
 };
 
@@ -92,7 +93,8 @@ export const resetUserPassword = async (userId: string, newPassword: string) => 
   if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
 
   const hashedPassword = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+  // 관리자가 초기화하면 다시 mustChangePassword = true
+  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword, mustChangePassword: true } });
 };
 
 // 본인이 직접 비밀번호 변경 (현재 비밀번호 확인 필요)
@@ -108,13 +110,13 @@ export const changeMyPassword = async (
   if (!isMatch) throw new AppError(400, ErrorCode.BAD_REQUEST, '현재 비밀번호가 올바르지 않습니다.');
 
   const hashedPassword = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+  // 비밀번호 직접 변경 시 mustChangePassword 해제
+  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword, mustChangePassword: false } });
 };
 
 // 사용자 삭제
 export const deleteUser = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
-
   await prisma.user.delete({ where: { id: userId } });
 };

@@ -29,6 +29,29 @@ interface RecentSubmission {
 
 const NAV_CARDS = [
   {
+    title: '문제은행',
+    description: '문제 등록, 선택지 관리',
+    href: '/admin/question-banks',
+    shortcut: 'G B',
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M2 6h12M2 6l6-4 6 4M2 6v1h12V6M3 7v5M6 7v5M10 7v5M13 7v5M2 12h12" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    title: '과정 관리',
+    description: '과정 생성, 사용자·시험 배정',
+    href: '/admin/courses',
+    shortcut: 'G C',
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M8 2L1 5.5l7 3.5 7-3.5L8 2z" strokeLinejoin="round" />
+        <path d="M1 5.5v4M4 7.2v3.3c0 1 1.79 1.8 4 1.8s4-.8 4-1.8V7.2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     title: '시험 관리',
     description: '시험 생성, 문제 등록, 사용자 할당',
     href: '/admin/exams',
@@ -317,9 +340,11 @@ export default function AdminDashboard() {
             )}
           </div>
           {recentSubmissions.length > 0 && (
-            <div className="border-t border-[var(--border-subtle)] px-5 py-2.5">
-              <Link href="/admin/results" className="text-xs text-[#5e6ad2] hover:underline">
-                전체 결과 보기 →
+            <div className="border-t border-[var(--border-subtle)] px-5 py-2 text-center">
+              <Link href="/admin/results">
+                <button className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                  전체 보기 →
+                </button>
               </Link>
             </div>
           )}

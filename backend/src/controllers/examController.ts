@@ -178,3 +178,16 @@ export const publishExam = async (
     next(err);
   }
 };
+
+export const unpublishExam = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const exam = await examService.unpublishExam(req.params.id);
+    res.json({ success: true, data: exam });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -10,6 +10,7 @@ export interface UserSummary {
   role: 'USER' | 'ADMIN';
   courseId: string | null;
   course: { id: string; name: string } | null;
+  mustChangePassword: boolean;
   createdAt: string;
   _count: { submissions: number; userExams: number };
 }
@@ -70,4 +71,12 @@ export const usersApi = {
   // 시험에서 사용자 할당 해제
   removeFromExam: (examId: string, userId: string) =>
     apiClient.delete(`/exams/${examId}/users/${userId}`),
+
+  // 과정 배정
+  assignCourse: (userId: string, courseId: string) =>
+    apiClient.patch(`/users/${userId}/course`, { courseId }),
+
+  // 과정 해제
+  removeCourse: (userId: string) =>
+    apiClient.delete(`/users/${userId}/course`),
 };

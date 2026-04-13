@@ -508,10 +508,11 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
+      {/* 삭제 확인 모달 */}
       <Modal
         isOpen={!!deleteTargetId}
         title="문제를 삭제하시겠습니까?"
-        message="삭제된 문제는 복구할 수 없습니다."
+        message="이 작업은 되돌릴 수 없습니다."
         confirmLabel="삭제"
         variant="danger"
         onConfirm={handleDeleteQuestion}

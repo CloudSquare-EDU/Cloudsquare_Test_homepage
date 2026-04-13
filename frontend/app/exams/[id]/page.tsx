@@ -249,32 +249,39 @@ export default function ExamPage() {
 
   // ── In Progress ──
   return (
-    <div className="min-h-screen bg-[var(--bg)] pb-24">
+    <div className="min-h-screen bg-[var(--bg)] pb-28 sm:pb-24">
       {/* 상단 고정 헤더 */}
       <div className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--sidebar-bg)]/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
-          <div>
-            <h1 className="text-sm font-semibold text-[var(--text-primary)]">{exam.title}</h1>
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-2.5 sm:px-5 sm:py-3">
+          {/* 제목 + 응답 수 */}
+          <div className="flex-1 min-w-0">
+            <h1 className="truncate text-sm font-semibold text-[var(--text-primary)]">{exam.title}</h1>
             <p className="text-xs text-[var(--text-muted)]">{answeredCount} / {totalCount} 응답</p>
           </div>
-          <div className="flex items-center gap-3">
-            {exam.duration > 0 && <Timer formattedTime={formattedTime} isWarning={isWarning} />}
-            {/* 진행률 바 */}
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="h-1.5 w-24 rounded-full bg-[var(--bg-raised)]">
-                <div
-                  className="h-full rounded-full bg-[#5e6ad2] transition-all"
-                  style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
-                />
-              </div>
-              <span className="text-xs text-[var(--text-muted)]">{totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%</span>
+          {/* 타이머 */}
+          {exam.duration > 0 && <Timer formattedTime={formattedTime} isWarning={isWarning} />}
+          {/* 진행률 바 (sm 이상) */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <div className="h-1.5 w-20 rounded-full bg-[var(--bg-raised)]">
+              <div
+                className="h-full rounded-full bg-[#5e6ad2] transition-all"
+                style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
+              />
             </div>
+            <span className="text-xs text-[var(--text-muted)]">{totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%</span>
           </div>
+        </div>
+        {/* 모바일 진행률 바 (전체 폭) */}
+        <div className="h-0.5 bg-[var(--bg-raised)] sm:hidden">
+          <div
+            className="h-full bg-[#5e6ad2] transition-all"
+            style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
+          />
         </div>
       </div>
 
       {/* 문제 목록 */}
-      <div className="mx-auto max-w-3xl px-5 pt-6 flex flex-col gap-4">
+      <div className="mx-auto max-w-3xl px-3 pt-4 flex flex-col gap-3 sm:px-5 sm:pt-6 sm:gap-4">
         {exam.questions.map((question, idx) => {
           const isMulti = question.answerCount > 1;
           const selectedIds = answers[question.id] ?? [];
@@ -282,9 +289,9 @@ export default function ExamPage() {
           return (
             <div
               key={question.id}
-              className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5"
+              className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5"
             >
-              <div className="mb-3 flex items-start gap-2.5">
+              <div className="mb-3 flex items-start gap-2">
                 <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold bg-[var(--bg-raised)] text-[#5e6ad2]">
                   Q{idx + 1}
                 </span>
@@ -298,7 +305,7 @@ export default function ExamPage() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-1.5 mt-4">
+              <div className="flex flex-col gap-2 mt-3">
                 {question.choices.map((choice) => {
                   const isSelected = selectedIds.includes(choice.id);
 
@@ -307,7 +314,7 @@ export default function ExamPage() {
                       <label
                         key={choice.id}
                         className={`
-                          flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm transition-colors
+                          flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors sm:px-4
                           ${isSelected
                             ? 'border-[#5e6ad2] bg-[rgba(94,106,210,0.1)] text-[var(--text-primary)]'
                             : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
@@ -318,12 +325,12 @@ export default function ExamPage() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleMultiToggle(question.id, choice.id)}
-                          className="h-4 w-4 rounded accent-[#5e6ad2]"
+                          className="h-4 w-4 shrink-0 rounded accent-[#5e6ad2]"
                         />
                         <span className={`shrink-0 text-xs font-mono ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-faint)]'}`}>
                           {choice.order}.
                         </span>
-                        {choice.content}
+                        <span className="leading-snug">{choice.content}</span>
                       </label>
                     );
                   }
@@ -333,7 +340,7 @@ export default function ExamPage() {
                       key={choice.id}
                       onClick={() => handleSingleSelect(question.id, choice.id)}
                       className={`
-                        flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm transition-colors
+                        flex items-center gap-3 rounded-lg border px-3 py-3 text-left text-sm transition-colors sm:px-4
                         ${isSelected
                           ? 'border-[#5e6ad2] bg-[rgba(94,106,210,0.1)] text-[var(--text-primary)]'
                           : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
@@ -346,7 +353,7 @@ export default function ExamPage() {
                       `}>
                         {choice.order}
                       </span>
-                      {choice.content}
+                      <span className="leading-snug">{choice.content}</span>
                     </button>
                   );
                 })}
@@ -357,21 +364,21 @@ export default function ExamPage() {
       </div>
 
       {/* 하단 고정 제출 바 */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)] bg-[var(--sidebar-bg)]/90 backdrop-blur-sm px-5 py-4">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
+      <div className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)] bg-[var(--sidebar-bg)]/90 backdrop-blur-sm px-4 py-3 sm:px-5 sm:py-4">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {errorMsg ? (
             <p className="text-xs text-[var(--danger-text)]">{errorMsg}</p>
           ) : (
             <p className="text-xs text-[var(--text-muted)]">
               {answeredCount < totalCount
                 ? `${totalCount - answeredCount}개 문제가 미응답입니다`
-                : '모든 문제에 답했습니다'}
+                : '모든 문제에 답했습니다 ✓'}
             </p>
           )}
           <Button
             onClick={() => setShowConfirmModal(true)}
             isLoading={isSubmitting}
-            size="lg"
+            className="w-full sm:w-auto"
           >
             제출하기 ({answeredCount}/{totalCount})
           </Button>

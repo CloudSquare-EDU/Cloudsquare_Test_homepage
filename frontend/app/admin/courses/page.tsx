@@ -186,14 +186,14 @@ export default function AdminCoursesPage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">과정 관리</h1>
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             과정별로 계정과 시험을 묶어 일괄 관리하세요
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowCreate((v) => !v)}>
+        <Button size="sm" className="whitespace-nowrap self-start" onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? '취소' : '+ 과정 생성'}
         </Button>
       </div>
@@ -251,35 +251,35 @@ export default function AdminCoursesPage() {
             return (
               <div key={course.id} className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--border-hover)]">
                 {/* 헤더 행 */}
-                <div className="flex items-center gap-4 px-5 py-4">
+                <div className="px-4 py-4 sm:px-5 flex flex-col md:flex-row md:items-center md:gap-3">
                   {/* 펼치기 버튼 */}
                   <button
                     onClick={() => toggleExpand(course.id)}
-                    className="flex flex-1 items-center gap-3 text-left"
+                    className="flex flex-1 min-w-0 items-center gap-3 text-left"
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-raised)] text-[#5e6ad2]">
                       <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M2 3h12M2 6h8M2 9h10M2 12h6" strokeLinecap="round" />
                       </svg>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-[var(--text-primary)] truncate">{course.name}</p>
-                      <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[var(--text-muted)]">
                         <span>계정 {course._count.users}명</span>
-                        <span>·</span>
+                        <span className="text-[var(--border)]">·</span>
                         <span>시험 {course._count.exams}개</span>
                       </div>
                     </div>
                     <svg
-                      className={`ml-auto h-3.5 w-3.5 shrink-0 text-[var(--text-faint)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      className={`ml-2 h-3.5 w-3.5 shrink-0 text-[var(--text-faint)] transition-transform md:hidden ${isExpanded ? 'rotate-180' : ''}`}
                       viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
                     >
                       <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
 
-                  {/* 액션 버튼 */}
-                  <div className="flex shrink-0 gap-2">
+                  {/* 액션 버튼: 모바일-하단분리 / 데스크탑-우측인라인 */}
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
                     <Button variant="secondary" size="sm" onClick={() => openAssignUsers(course.id)}>
                       계정 배정
                     </Button>
@@ -289,6 +289,18 @@ export default function AdminCoursesPage() {
                     <Button variant="danger" size="sm" onClick={() => setDeleteTargetId(course.id)}>
                       삭제
                     </Button>
+                    {/* 데스크탑: 펼치기 화살표 버튼 */}
+                    <button
+                      onClick={() => toggleExpand(course.id)}
+                      className="hidden md:flex items-center justify-center h-7 w-7 rounded hover:bg-[var(--bg-raised)] text-[var(--text-faint)]"
+                    >
+                      <svg
+                        className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+                      >
+                        <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
 
@@ -464,7 +476,7 @@ export default function AdminCoursesPage() {
                       )}
                       {isInOtherCourse && (
                         <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[var(--text-muted)] truncate max-w-[80px]">
-                          {exam.course?.name}
+                          {exam.course?.name ?? '타 과정'}
                         </span>
                       )}
                     </button>

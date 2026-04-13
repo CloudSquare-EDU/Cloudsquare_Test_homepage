@@ -47,7 +47,11 @@ export default function AdminResultsPage() {
     if (filter === 'submitted') result = result.filter((u) => u.submitted);
     if (filter === 'not_submitted') result = result.filter((u) => !u.submitted);
     result.sort((a, b) => {
-      if (sort === 'name') return a.userName.localeCompare(b.userName, 'ko', { numeric: true });
+      if (sort === 'name') {
+        const nameCmp = a.userName.localeCompare(b.userName, 'ko', { numeric: true });
+        if (nameCmp !== 0) return nameCmp;
+        return a.userEmail.localeCompare(b.userEmail, 'ko', { numeric: true });
+      }
       if (sort === 'score_desc') return (b.submission?.score ?? -1) - (a.submission?.score ?? -1);
       if (sort === 'score_asc') return (a.submission?.score ?? 101) - (b.submission?.score ?? 101);
       if (sort === 'date_desc') {
@@ -301,41 +305,47 @@ export default function AdminResultsPage() {
                           {getFilteredSorted(exam.id, status.users).map((userStatus: ExamUserStatus) => (
                             <div
                               key={userStatus.userId}
-                              className="flex items-center justify-between px-5 py-3.5"
+                              className="px-5 py-3.5 flex flex-col md:flex-row md:items-center md:gap-3"
                             >
-                              {/* 사용자 */}
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[#5e6ad2]">
-                                  {userStatus.userName.charAt(0)}
+                              {/* 사용자 정보 + 점수 뱃지 (모바일: 한 행, 데스크탑: 좌측) */}
+                              <div className="flex flex-1 min-w-0 items-center justify-between gap-3 md:justify-start">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-semibold text-[#5e6ad2]">
+                                    {userStatus.userName.charAt(0)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-[var(--text-primary)] truncate">{userStatus.userName}</p>
+                                    <p className="text-xs text-[var(--text-faint)] truncate">{userStatus.userEmail}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-sm font-medium text-[var(--text-primary)]">{userStatus.userName}</p>
-                                  <p className="text-xs text-[var(--text-faint)]">{userStatus.userEmail}</p>
-                                </div>
-                              </div>
 
-                              {/* 결과 영역 */}
-                              <div className="flex items-center gap-3">
+                                {/* 점수 뱃지 — 모바일: 우측 고정 / 데스크탑: 인라인 */}
                                 {userStatus.submitted && userStatus.submission ? (
-                                  <>
-                                    {/* 점수 뱃지 */}
+                                  <div className="flex items-center gap-2 shrink-0">
                                     <span className={`rounded px-2 py-0.5 text-sm font-bold ${scoreBadge(userStatus.submission.score)}`}>
                                       {userStatus.submission.score}점
                                     </span>
-
-                                    {/* 정답 수 */}
-                                    <span className="text-xs text-[var(--text-faint)]">
+                                    <span className="hidden sm:inline text-xs text-[var(--text-faint)]">
                                       {Math.round(((userStatus.submission.score ?? 0) / 100) * userStatus.submission.totalQuestions)}
                                       /{userStatus.submission.totalQuestions}
                                     </span>
+                                  </div>
+                                ) : (
+                                  <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)] shrink-0">
+                                    미응시
+                                  </span>
+                                )}
+                              </div>
 
-                                    {/* 응시일 */}
-                                    <span className={`text-xs ${scoreColor(null)} text-[var(--text-faint)] text-right min-w-[60px]`}>
+                              {/* 액션 영역: 모바일-하단분리 / 데스크탑-우측인라인 */}
+                              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-2.5 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
+                                {userStatus.submitted && userStatus.submission ? (
+                                  <>
+                                    <span className="text-xs text-[var(--text-faint)] md:mr-1">
                                       {new Date(userStatus.submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
                                       {' '}
                                       {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
-
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -343,11 +353,9 @@ export default function AdminResultsPage() {
                                     >
                                       문제 목록
                                     </Button>
-
                                     <Link href={`/submissions/${userStatus.submission.id}`}>
                                       <Button variant="secondary" size="sm">결과 보기</Button>
                                     </Link>
-
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -364,18 +372,13 @@ export default function AdminResultsPage() {
                                     </Button>
                                   </>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => openAssignment(exam.id, userStatus.userId, userStatus.userName)}
-                                    >
-                                      문제 목록
-                                    </Button>
-                                    <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">
-                                      미응시
-                                    </span>
-                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openAssignment(exam.id, userStatus.userId, userStatus.userName)}
+                                  >
+                                    문제 목록
+                                  </Button>
                                 )}
                               </div>
                             </div>
@@ -486,13 +489,9 @@ export default function AdminResultsPage() {
             </div>
 
             {/* 푸터 */}
-            {assignmentModal.questions && assignmentModal.questions.length > 0 && (
-              <div className="border-t border-[var(--border-subtle)] px-5 py-3">
-                <p className="text-xs text-[var(--text-faint)]">
-                  총 <span className="font-medium text-[var(--text-secondary)]">{assignmentModal.questions.length}</span>문제 배정됨
-                </p>
-              </div>
-            )}
+            <div className="flex justify-end border-t border-[var(--border-subtle)] px-5 py-3">
+              <Button size="sm" onClick={() => setAssignmentModal(null)}>닫기</Button>
+            </div>
           </div>
         </div>
       )}

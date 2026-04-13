@@ -78,7 +78,7 @@ export default function AdminUsersPage() {
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
     try {
-      await Promise.all([...selectedIds].map((id) => usersApi.delete(id)));
+      await Promise.all(Array.from(selectedIds).map((id) => usersApi.delete(id)));
       setSelectedIds(new Set());
       setShowBulkDeleteConfirm(false);
       loadUsers();
@@ -104,7 +104,11 @@ export default function AdminUsersPage() {
   const loadUsers = () => {
     setIsLoading(true);
     usersApi.getAll()
-      .then((data) => setUsers([...data].sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }))))
+      .then((data) => setUsers([...data].sort((a, b) => {
+        const nameCmp = a.name.localeCompare(b.name, 'ko', { numeric: true });
+        if (nameCmp !== 0) return nameCmp;
+        return a.email.localeCompare(b.email, 'ko', { numeric: true });
+      })))
       .catch(() => setError('사용자 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   };
@@ -285,12 +289,12 @@ export default function AdminUsersPage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">사용자 관리</h1>
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">계정 생성 및 시험/과정 할당을 관리하세요</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {selectedIds.size > 0 && (
             <Button
               variant="danger"
@@ -483,50 +487,51 @@ export default function AdminUsersPage() {
             return (
             <div
               key={user.id}
-              className={`flex items-center gap-4 rounded-lg border bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors ${
+              className={`rounded-lg border bg-[var(--bg-surface)] px-4 py-4 hover:border-[var(--border-hover)] transition-colors sm:px-5 flex flex-col md:flex-row md:items-center md:gap-3 ${
                 isSelected ? 'border-[#5e6ad2]/50 bg-[rgba(94,106,210,0.04)]' : 'border-[var(--border)]'
               }`}
             >
-              {/* 체크박스 */}
-              <input
-                type="checkbox"
-                checked={isSelected}
-                disabled={isAdmin}
-                onChange={() => !isAdmin && toggleSelect(user.id)}
-                className="h-4 w-4 cursor-pointer accent-[#5e6ad2] disabled:cursor-not-allowed disabled:opacity-30"
-              />
-              {/* 아바타 */}
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-sm font-semibold text-[#5e6ad2]">
-                {user.name.charAt(0)}
-              </div>
-
               {/* 사용자 정보 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-medium text-[var(--text-primary)] truncate">{user.name}</p>
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    user.role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
-                  }`}>
-                    {user.role === 'ADMIN' ? '관리자' : '일반'}
-                  </span>
-                  {/* 과정 배지 */}
-                  {user.course && (
-                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
-                      {user.course.name}
-                    </span>
-                  )}
+              <div className="flex flex-1 min-w-0 items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  disabled={isAdmin}
+                  onChange={() => !isAdmin && toggleSelect(user.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#5e6ad2] disabled:cursor-not-allowed disabled:opacity-30"
+                />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-sm font-semibold text-[#5e6ad2]">
+                  {user.name.charAt(0)}
                 </div>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                  <span>{user.email}</span>
-                  <span>·</span>
-                  <span>응시 {user._count.submissions}회</span>
-                  <span>·</span>
-                  <span>할당 {user._count.userExams}개</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="font-medium text-[var(--text-primary)]">{user.name}</p>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      user.role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                    }`}>
+                      {user.role === 'ADMIN' ? '관리자' : '일반'}
+                    </span>
+                    {user.mustChangePassword && (
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--warning-bg)] text-[var(--warning-text)] border border-[var(--warning-border)]">
+                        비번 변경 필요
+                      </span>
+                    )}
+                    {user.course && (
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                        {user.course.name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">
+                    <span>{user.email}</span>
+                    <span className="text-[var(--border)]">·</span>
+                    <span>응시 {user._count.submissions}회</span>
+                  </div>
                 </div>
               </div>
 
-              {/* 액션 버튼 */}
-              <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+              {/* 액션 버튼: 모바일-하단분리 / 데스크탑-우측인라인 */}
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
                 <Button variant="secondary" size="sm" onClick={() => openCourseModal(user)}>
                   과정 배정
                 </Button>
@@ -665,13 +670,11 @@ export default function AdminUsersPage() {
                           <p className="mt-0.5 text-xs text-[var(--text-faint)] truncate max-w-[240px]">{course.description}</p>
                         )}
                         <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                          사용자 {course._count.users}명 · 시험 {course._count.exams}개
+                          사용자 {course._count.users}명 
                         </p>
                       </div>
                       {isSelected && (
-                        <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium bg-[#5e6ad2] text-white">
-                          현재
-                        </span>
+                        <span className="text-xs text-[#5e6ad2]">현재 과정</span>
                       )}
                     </button>
                   );
@@ -679,13 +682,12 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            <div className="mt-5 flex justify-end">
-              <Button size="sm" onClick={() => setCourseTarget(null)}>완료</Button>
+            <div className="mt-4 flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setCourseTarget(null)}>닫기</Button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

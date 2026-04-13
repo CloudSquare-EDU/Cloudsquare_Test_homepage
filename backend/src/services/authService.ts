@@ -26,6 +26,7 @@ interface AuthResult {
     email: string;
     name: string;
     role: string;
+    mustChangePassword: boolean;
   };
 }
 
@@ -49,7 +50,7 @@ export const register = async (input: RegisterInput): Promise<AuthResult> => {
 
   const user = await prisma.user.create({
     data: { email, password: hashedPassword, name },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, mustChangePassword: true },
   });
 
   const payload: JwtPayload = { userId: user.id, email: user.email, role: user.role };
@@ -81,6 +82,6 @@ export const login = async (input: LoginInput): Promise<AuthResult> => {
 
   return {
     accessToken,
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword },
   };
 };

@@ -10,6 +10,7 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthResponse {
@@ -248,6 +249,7 @@ export interface ExamUserStatus {
 }
 
 export interface ExamSubmissionStatus {
-  exam: { id: string; title: string; duration: number };
+  examId: string;
+  examTitle: string;
   users: ExamUserStatus[];
 }

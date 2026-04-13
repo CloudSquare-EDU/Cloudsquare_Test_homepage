@@ -1,3 +1,34 @@
+# 환경 변수 (절대 올리면 안됨)
+.env
+.env.local
+.env.production
+.env.development
+
+# .env.example은 올라가도 됨 (민감 정보 없는 샘플)
+
 # 엑셀 파일
 *.xlsx
 *.xls
+*.csv
+
+# 의존성
+node_modules/
+
+# 빌드 결과물
+dist/
+build/
+.next/
+out/
+
+# 캐시 / 자동생성 파일
+*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Prisma 자동생성 클라이언트 (로컬에서만 사용)
+backend/node_modules/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
