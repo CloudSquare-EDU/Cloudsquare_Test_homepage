@@ -10,12 +10,20 @@ import { CourseSummary, CourseDetail, AdminExam } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
+
+const PAGE_LIMIT = 20;
 
 export default function AdminCoursesPage() {
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // 생성 폼
@@ -43,15 +51,27 @@ export default function AdminCoursesPage() {
   const [allExams, setAllExams] = useState<AdminExam[]>([]);
   const [loadingExams, setLoadingExams] = useState(false);
 
-  const loadCourses = () => {
+  const loadCourses = (p = page, s = search) => {
     setIsLoading(true);
-    coursesApi.getAll()
-      .then(setCourses)
+    coursesApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined })
+      .then((res) => {
+        setCourses(res.data);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+      })
       .catch(() => setError('과정 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadCourses(); }, []);
+  useEffect(() => { loadCourses(page, search); }, [page, search]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setSearch(searchInput);
+  };
+
+  const handlePageChange = (p: number) => { setPage(p); setExpandedId(null); };
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -122,8 +142,8 @@ export default function AdminCoursesPage() {
     setAssignUserCourseId(courseId);
     setLoadingUsers(true);
     try {
-      const users = await usersApi.getAll();
-      setAllUsers(users);
+      const res = await usersApi.getAll({ limit: 200 }); // 배정 모달은 전체 목록 필요
+      setAllUsers(res.data);
     } finally {
       setLoadingUsers(false);
     }
@@ -136,8 +156,8 @@ export default function AdminCoursesPage() {
       } else {
         await coursesApi.assignUser(courseId, userId);
       }
-      const users = await usersApi.getAll();
-      setAllUsers(users);
+      const usersRes = await usersApi.getAll({ limit: 200 });
+      setAllUsers(usersRes.data);
       await refreshDetail(courseId);
       loadCourses();
     } catch (err) {
@@ -150,8 +170,8 @@ export default function AdminCoursesPage() {
     setAssignExamCourseId(courseId);
     setLoadingExams(true);
     try {
-      const exams = await examsApi.getAllAdmin();
-      setAllExams(exams);
+      const res = await examsApi.getAllAdmin({ limit: 200 }); // 배정 모달은 전체 목록 필요
+      setAllExams(res.data);
     } finally {
       setLoadingExams(false);
     }
@@ -164,22 +184,14 @@ export default function AdminCoursesPage() {
       } else {
         await coursesApi.assignExam(courseId, examId);
       }
-      const exams = await examsApi.getAllAdmin();
-      setAllExams(exams);
+      const examsRes = await examsApi.getAllAdmin({ limit: 200 });
+      setAllExams(examsRes.data);
       await refreshDetail(courseId);
       loadCourses();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '배정 중 오류가 발생했습니다.');
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
-      </div>
-    );
-  }
 
   const deletingCourse = courses.find((c) => c.id === deleteTargetId);
 
@@ -235,10 +247,28 @@ export default function AdminCoursesPage() {
         </form>
       )}
 
+      {/* 검색 */}
+      <form onSubmit={handleSearch} className="mb-4 flex gap-2">
+        <Input
+          placeholder="과정명 검색..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button type="submit" variant="secondary" size="sm">검색</Button>
+        {search && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}>초기화</Button>
+        )}
+      </form>
+
       {/* 과정 목록 */}
-      {courses.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+        </div>
+      ) : courses.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-          <p className="text-sm text-[var(--text-muted)]">생성된 과정이 없습니다</p>
+          <p className="text-sm text-[var(--text-muted)]">{search ? `"${search}" 검색 결과가 없습니다` : '생성된 과정이 없습니다'}</p>
           <p className="mt-1 text-xs text-[var(--text-faint)]">과정을 먼저 생성하세요</p>
         </div>
       ) : (
@@ -362,6 +392,13 @@ export default function AdminCoursesPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {!isLoading && totalPages > 1 && (
+        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+          <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onPageChange={handlePageChange} />
         </div>
       )}
 

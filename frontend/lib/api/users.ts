@@ -34,9 +34,24 @@ export interface BulkUserResult {
   failed: { email: string; reason: string }[];
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const usersApi = {
-  // 전체 사용자 목록
-  getAll: () => apiClient.get<UserSummary[]>('/users'),
+  // 전체 사용자 목록 (페이지네이션)
+  getAll: (params?: { page?: number; limit?: number; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return apiClient.get<PaginatedResponse<UserSummary>>(`/users${query ? `?${query}` : ''}`);
+  },
 
   // 사용자 직접 생성
   create: (data: { email: string; password: string; name: string; role?: 'USER' | 'ADMIN' }) =>

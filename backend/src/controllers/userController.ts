@@ -20,13 +20,16 @@ const updateRoleSchema = z.object({
 });
 
 export const getAllUsers = async (
-  _req: AuthRequest,
+  req: AuthRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const users = await userService.getAllUsers();
-    res.json({ success: true, data: users });
+    const page = parseInt(req.query['page'] as string) || 1;
+    const limit = parseInt(req.query['limit'] as string) || 20;
+    const search = (req.query['search'] as string) || undefined;
+    const result = await userService.getAllUsers({ page, limit, search });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

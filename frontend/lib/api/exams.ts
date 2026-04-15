@@ -10,7 +10,14 @@ export const examsApi = {
 
   getAll: () => apiClient.get<ExamSummary[]>('/exams'),
 
-  getAllAdmin: () => apiClient.get<AdminExam[]>('/exams'),
+  getAllAdmin: (params?: { page?: number; limit?: number; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return apiClient.get<{ data: AdminExam[]; total: number; page: number; limit: number; totalPages: number }>(`/exams${query ? `?${query}` : ''}`);
+  },
 
   getById: (id: string) => apiClient.get<ExamDetail>(`/exams/${id}`),
 

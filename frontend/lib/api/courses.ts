@@ -2,8 +2,23 @@
 import { apiClient } from './client';
 import { CourseSummary, CourseDetail } from '../types';
 
+export interface PaginatedCoursesResponse {
+  data: CourseSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const coursesApi = {
-  getAll: () => apiClient.get<CourseSummary[]>('/courses'),
+  getAll: (params?: { page?: number; limit?: number; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return apiClient.get<PaginatedCoursesResponse>(`/courses${query ? `?${query}` : ''}`);
+  },
 
   getById: (id: string) => apiClient.get<CourseDetail>(`/courses/${id}`),
 

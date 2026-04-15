@@ -5,14 +5,40 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode } from '../types';
 
-// ── 전체 과정 목록 ──────────────────────────────────────────
-export const getAllCourses = async () => {
-  return prisma.course.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { users: true, exams: true } },
-    },
-  });
+// ── 전체 과정 목록 (페이지네이션 + 검색 지원) ──────────────────
+export const getAllCourses = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+} = {}) => {
+  const page = Math.max(1, params.page ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+  const skip = (page - 1) * limit;
+
+  const where = params.search
+    ? { name: { contains: params.search, mode: 'insensitive' as const } }
+    : {};
+
+  const [total, courses] = await Promise.all([
+    prisma.course.count({ where }),
+    prisma.course.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { users: true, exams: true } },
+      },
+    }),
+  ]);
+
+  return {
+    data: courses,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
 };
 
 // ── 과정 상세 (소속 사용자 + 시험 포함) ───────────────────────

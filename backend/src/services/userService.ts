@@ -5,7 +5,7 @@
 // - role 변경 (USER ↔ ADMIN)
 
 import bcrypt from 'bcryptjs';
-import { Role } from '@prisma/client';
+import { Role, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode } from '../types';
@@ -17,22 +17,53 @@ interface CreateUserInput {
   role?: Role;
 }
 
-// 전체 사용자 목록 조회 (비밀번호 제외, 과정 정보 포함)
-export const getAllUsers = async () => {
-  return prisma.user.findMany({
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      courseId: true,
-      mustChangePassword: true,
-      createdAt: true,
-      course: { select: { id: true, name: true } },
-      _count: { select: { submissions: true, userExams: true } },
-    },
-  });
+// 전체 사용자 목록 조회 (페이지네이션 + 검색 지원)
+export const getAllUsers = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+} = {}) => {
+  const page = Math.max(1, params.page ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+  const skip = (page - 1) * limit;
+
+  const where = params.search
+    ? {
+        OR: [
+          { name: { contains: params.search, mode: 'insensitive' as const } },
+          { email: { contains: params.search, mode: 'insensitive' as const } },
+        ],
+      }
+    : {};
+
+  const [total, users] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        courseId: true,
+        mustChangePassword: true,
+        createdAt: true,
+        course: { select: { id: true, name: true } },
+        _count: { select: { submissions: true, userExams: true } },
+      },
+    }),
+  ]);
+
+  return {
+    data: users,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
 };
 
 // 관리자가 사용자 계정 직접 생성

@@ -116,17 +116,21 @@ export default function AdminDashboard() {
 
     const loadStats = async () => {
       try {
-        const [exams, users, courseList] = await Promise.all([
-          examsApi.getAllAdmin(),
-          usersApi.getAll(),
-          coursesApi.getAll(),
+        const [examsRes, usersRes, coursesRes] = await Promise.all([
+          examsApi.getAllAdmin({ limit: 200 }),
+          usersApi.getAll({ limit: 200 }),
+          coursesApi.getAll({ limit: 200 }),
         ]);
+
+        const exams = examsRes.data;
+        const users = usersRes.data;
+        const courseList = coursesRes.data;
 
         setCourses(courseList);
 
         // 각 시험의 응시 현황 로드
         const statuses: Array<{ examId: string; status: ExamSubmissionStatus }> = [];
-        for (const exam of exams as AdminExam[]) {
+        for (const exam of exams) {
           try {
             const status = await submissionsApi.getByExam(exam.id);
             statuses.push({ examId: exam.id, status });
@@ -139,8 +143,8 @@ export default function AdminDashboard() {
           courseUserCounts[c.id] = c._count.users;
         }
 
-        setRawData({ exams: exams as AdminExam[], statuses, userCount: users.filter((u) => u.role === 'USER').length, courseUserCounts });
-        computeStats(exams as AdminExam[], statuses, users.filter((u) => u.role === 'USER').length, '');
+        setRawData({ exams, statuses, userCount: users.filter((u) => u.role === 'USER').length, courseUserCounts });
+        computeStats(exams, statuses, users.filter((u) => u.role === 'USER').length, '');
       } catch { /* 무시 */ }
       finally { setIsLoading(false); }
     };

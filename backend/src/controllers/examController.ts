@@ -49,11 +49,16 @@ export const getExams = async (
 ): Promise<void> => {
   try {
     const isAdmin = req.user?.role === 'ADMIN';
-    // ADMIN: 전체 시험 목록 / USER: 자신에게 할당된 시험만
-    const exams = isAdmin
-      ? await examService.getAllExams()
-      : await examService.getAssignedExamsForUser(req.user!.userId);
-    res.json({ success: true, data: exams });
+    if (isAdmin) {
+      const page = parseInt(req.query['page'] as string) || 1;
+      const limit = parseInt(req.query['limit'] as string) || 20;
+      const search = (req.query['search'] as string) || undefined;
+      const result = await examService.getAllExams({ page, limit, search });
+      res.json({ success: true, data: result });
+    } else {
+      const exams = await examService.getAssignedExamsForUser(req.user!.userId);
+      res.json({ success: true, data: exams });
+    }
   } catch (err) {
     next(err);
   }

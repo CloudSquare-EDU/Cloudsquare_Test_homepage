@@ -9,6 +9,7 @@ import { CourseSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
 import { downloadSampleExcel } from '@/lib/utils';
 
@@ -33,10 +34,17 @@ interface ExcelUserRow {
 }
 
 
+const PAGE_LIMIT = 20;
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
 
   const [createMode, setCreateMode] = useState<'single' | 'excel' | null>(null);
   const [createForm, setCreateForm] = useState({
@@ -101,19 +109,35 @@ export default function AdminUsersPage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const [isAssigningCourse, setIsAssigningCourse] = useState(false);
 
-  const loadUsers = () => {
+  const loadUsers = (p = page, s = search) => {
     setIsLoading(true);
-    usersApi.getAll()
-      .then((data) => setUsers([...data].sort((a, b) => {
-        const nameCmp = a.name.localeCompare(b.name, 'ko', { numeric: true });
-        if (nameCmp !== 0) return nameCmp;
-        return a.email.localeCompare(b.email, 'ko', { numeric: true });
-      })))
+    usersApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined })
+      .then((res) => {
+        const sorted = [...res.data].sort((a, b) => {
+          const nameCmp = a.name.localeCompare(b.name, 'ko', { numeric: true });
+          if (nameCmp !== 0) return nameCmp;
+          return a.email.localeCompare(b.email, 'ko', { numeric: true });
+        });
+        setUsers(sorted);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+      })
       .catch(() => setError('사용자 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(page, search); }, [page, search]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setSearch(searchInput);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    setSelectedIds(new Set());
+  };
 
   const resetCreateMode = () => {
     setCreateMode(null);
@@ -239,8 +263,8 @@ export default function AdminUsersPage() {
     setCourseTarget(user);
     setIsLoadingCourses(true);
     try {
-      const courses = await coursesApi.getAll();
-      setAllCourses(courses);
+      const res = await coursesApi.getAll({ limit: 200 });
+      setAllCourses(res.data);
     } finally {
       setIsLoadingCourses(false);
     }
@@ -452,10 +476,28 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {/* ── 검색 ── */}
+      <form onSubmit={handleSearch} className="mb-4 flex gap-2">
+        <Input
+          placeholder="이름 또는 이메일 검색..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button type="submit" variant="secondary" size="sm">검색</Button>
+        {search && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}>초기화</Button>
+        )}
+      </form>
+
       {/* ── 사용자 목록 ── */}
-      {users.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+        </div>
+      ) : users.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-          <p className="text-sm text-[var(--text-muted)]">등록된 사용자가 없습니다</p>
+          <p className="text-sm text-[var(--text-muted)]">{search ? `"${search}" 검색 결과가 없습니다` : '등록된 사용자가 없습니다'}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -548,6 +590,19 @@ export default function AdminUsersPage() {
             </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {!isLoading && totalPages > 1 && (
+        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={PAGE_LIMIT}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
 

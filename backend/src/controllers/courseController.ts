@@ -15,10 +15,13 @@ const assignUsersSchema = z.object({
 });
 
 // GET /courses
-export const listCourses = async (_req: Request, res: Response, next: NextFunction) => {
+export const listCourses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const courses = await courseService.getAllCourses();
-    res.json({ success: true, data: courses });
+    const page = parseInt(req.query['page'] as string) || 1;
+    const limit = parseInt(req.query['limit'] as string) || 20;
+    const search = (req.query['search'] as string) || undefined;
+    const result = await courseService.getAllCourses({ page, limit, search });
+    res.json({ success: true, data: result });
   } catch (e) { next(e); }
 };
 

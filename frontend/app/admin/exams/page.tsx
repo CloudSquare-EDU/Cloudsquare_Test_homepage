@@ -10,12 +10,20 @@ import { AdminExam, CourseSummary, QuestionBankSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
 import { formatDuration } from '@/lib/utils';
+
+const PAGE_LIMIT = 20;
 
 export default function AdminExamsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
   const [isCreating, setIsCreating] = useState(false);
@@ -62,16 +70,21 @@ export default function AdminExamsPage() {
     }
   };
 
-  const loadExams = () => {
-    examsApi.getAllAdmin()
-      .then(setExams)
+  const loadExams = (p = page, s = search) => {
+    setIsLoading(true);
+    examsApi.getAllAdmin({ page: p, limit: PAGE_LIMIT, search: s || undefined })
+      .then((res) => {
+        setExams(res.data);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+      })
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   };
 
   const loadCourses = () => {
     coursesApi.getAll()
-      .then(setAllCourses)
+      .then((res) => setAllCourses(res.data))
       .catch(() => { /* 무시 */ });
   };
 
@@ -81,11 +94,16 @@ export default function AdminExamsPage() {
       .catch(() => { /* 무시 */ });
   };
 
-  useEffect(() => {
-    loadExams();
-    loadCourses();
-    loadBanks();
-  }, []);
+  useEffect(() => { loadExams(page, search); }, [page, search]);
+  useEffect(() => { loadCourses(); loadBanks(); }, []);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setSearch(searchInput);
+  };
+
+  const handlePageChange = (p: number) => setPage(p);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -311,10 +329,28 @@ export default function AdminExamsPage() {
         </form>
       )}
 
+      {/* 검색 */}
+      <form onSubmit={handleSearch} className="mb-4 flex gap-2">
+        <Input
+          placeholder="시험명 검색..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button type="submit" variant="secondary" size="sm">검색</Button>
+        {search && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}>초기화</Button>
+        )}
+      </form>
+
       {/* 시험 목록 */}
-      {exams.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+        </div>
+      ) : exams.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-          <p className="text-sm text-[var(--text-muted)]">등록된 시험이 없습니다</p>
+          <p className="text-sm text-[var(--text-muted)]">{search ? `"${search}" 검색 결과가 없습니다` : '등록된 시험이 없습니다'}</p>
           <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 시험을 생성하세요</p>
         </div>
       ) : (
@@ -396,6 +432,13 @@ export default function AdminExamsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {!isLoading && totalPages > 1 && (
+        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+          <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onPageChange={handlePageChange} />
         </div>
       )}
 

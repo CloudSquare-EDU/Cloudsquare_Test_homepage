@@ -9,8 +9,11 @@ import { AdminExam, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } fro
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
 import { formatDuration, scoreColor } from '@/lib/utils';
+
+const PAGE_LIMIT = 20;
 
 const scoreBadge = (score: number | null): string => {
   if (score === null) return 'bg-[var(--bg-raised)] text-[var(--text-muted)]';
@@ -22,6 +25,9 @@ const scoreBadge = (score: number | null): string => {
 export default function AdminResultsPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
   const [examStatus, setExamStatus] = useState<Record<string, ExamSubmissionStatus>>({});
   const [loadingExamId, setLoadingExamId] = useState<string | null>(null);
@@ -83,12 +89,17 @@ export default function AdminResultsPage() {
   };
 
   useEffect(() => {
+    setIsLoading(true);
     examsApi
-      .getAllAdmin()
-      .then(setExams)
+      .getAllAdmin({ page, limit: PAGE_LIMIT })
+      .then((res) => {
+        setExams(res.data);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+      })
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [page]);
 
   const toggleExam = async (examId: string) => {
     if (expandedExamId === examId) { setExpandedExamId(null); return; }
@@ -167,7 +178,11 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {exams.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+        </div>
+      ) : exams.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
           <p className="text-sm text-[var(--text-muted)]">등록된 시험이 없습니다</p>
         </div>
@@ -391,6 +406,19 @@ export default function AdminResultsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {!isLoading && totalPages > 1 && (
+        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={PAGE_LIMIT}
+            onPageChange={(p) => { setPage(p); setExpandedExamId(null); }}
+          />
         </div>
       )}
 

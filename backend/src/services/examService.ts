@@ -111,15 +111,41 @@ export const getAssignedExamsWithSubmissions = async (userId: string) => {
 };
 
 // 전체 시험 목록 (ADMIN용) — 과정 + 문제은행 정보 포함
-export const getAllExams = async () => {
-  return prisma.exam.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { questions: true, submissions: true } },
-      course: { select: { id: true, name: true } },
-      questionBank: { select: { id: true, name: true, _count: { select: { questions: true } } } },
-    },
-  });
+export const getAllExams = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+} = {}) => {
+  const page = Math.max(1, params.page ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+  const skip = (page - 1) * limit;
+
+  const where = params.search
+    ? { title: { contains: params.search, mode: 'insensitive' as const } }
+    : {};
+
+  const [total, exams] = await Promise.all([
+    prisma.exam.count({ where }),
+    prisma.exam.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { questions: true, submissions: true } },
+        course: { select: { id: true, name: true } },
+        questionBank: { select: { id: true, name: true, _count: { select: { questions: true } } } },
+      },
+    }),
+  ]);
+
+  return {
+    data: exams,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
 };
 
 // 시험 상세 + 문제 조회
