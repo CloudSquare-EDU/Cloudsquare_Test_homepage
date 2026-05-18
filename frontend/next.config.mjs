@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
+
   // ─── 보안 헤더 ─────────────────────────────────────────────
   async headers() {
     return [

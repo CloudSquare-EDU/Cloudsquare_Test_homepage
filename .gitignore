@@ -32,3 +32,5 @@ backend/node_modules/
 Thumbs.db
 .vscode/
 .idea/
+
+.claude
