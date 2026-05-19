@@ -29,7 +29,13 @@ export default function HomePage() {
 
     examsApi.getMy()
       .then((examList) => {
-        setExams(examList);
+        const sorted = [...examList].sort((a, b) => {
+          const aDate = a.startDate ? new Date(a.startDate).getTime() : 0;
+          const bDate = b.startDate ? new Date(b.startDate).getTime() : 0;
+          if (bDate !== aDate) return bDate - aDate;
+          return a.title.localeCompare(b.title, 'ko', { numeric: true });
+        });
+        setExams(sorted);
       })
       .catch(() => setError('시험 목록을 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
