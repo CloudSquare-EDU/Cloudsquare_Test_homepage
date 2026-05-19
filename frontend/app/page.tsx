@@ -112,7 +112,7 @@ export default function HomePage() {
 
                 {/* 시험 정보 */}
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium truncate ${done || isUnavailable ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
+                  <p className={`font-medium break-words ${done || isUnavailable ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
                     {exam.title}
                   </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--text-muted)]">

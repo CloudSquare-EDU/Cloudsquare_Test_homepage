@@ -16,10 +16,10 @@ import { downloadSampleExcel } from '@/lib/utils';
 const handleDownloadUserSample = () => {
   downloadSampleExcel(
     [
-      ['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)'],
-      ['홍길동', 'hong@example.com', 'password123', 'USER'],
-      ['김관리', 'admin@example.com', 'admin1234', 'USER'],
-      ['이수강', 'lee@example.com', 'pass5678', 'USER'],
+      ['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)'],
+      ['홍길동', 'hong@example.com', 'password123', 'USER', '2025 클라우드 기초'],
+      ['김관리', 'admin@example.com', 'admin1234', 'USER', ''],
+      ['이수강', 'lee@example.com', 'pass5678', 'USER', '2025 클라우드 기초'],
     ],
     '사용자목록',
     '계정_일괄생성_샘플',
@@ -31,6 +31,7 @@ interface ExcelUserRow {
   이메일: string;
   '비밀번호(8자 이상)': string;
   '권한(USER/ADMIN)': string;
+  '과정명(선택)'?: string;
 }
 
 
@@ -103,17 +104,24 @@ export default function AdminUsersPage() {
   const [pwResetError, setPwResetError] = useState<string | null>(null);
   const [isResettingPw, setIsResettingPw] = useState(false);
 
-  // 과정 배정 모달
+  // 과정 배정 모달 (단일 사용자)
   const [courseTarget, setCourseTarget] = useState<UserSummary | null>(null);
   const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const [isAssigningCourse, setIsAssigningCourse] = useState(false);
+
+  // 과정 일괄 배정 (다중 선택)
+  const [showBulkCourseModal, setShowBulkCourseModal] = useState(false);
+  const [bulkCourseSelectedId, setBulkCourseSelectedId] = useState<string>('');
+  const [isBulkAssigningCourse, setIsBulkAssigningCourse] = useState(false);
 
   const loadUsers = (p = page, s = search) => {
     setIsLoading(true);
     usersApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined })
       .then((res) => {
         const sorted = [...res.data].sort((a, b) => {
+          if (a.role === 'ADMIN' && b.role !== 'ADMIN') return -1;
+          if (a.role !== 'ADMIN' && b.role === 'ADMIN') return 1;
           const nameCmp = a.name.localeCompare(b.name, 'ko', { numeric: true });
           if (nameCmp !== 0) return nameCmp;
           return a.email.localeCompare(b.email, 'ko', { numeric: true });
@@ -207,6 +215,39 @@ export default function AdminUsersPage() {
         role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
       }));
       const result = await usersApi.bulkCreate(bulkUsers);
+
+      // 과정 자동 배정
+      const rowsWithCourse = excelPreview.filter((r) => r['과정명(선택)']?.toString().trim());
+      if (rowsWithCourse.length > 0 && result.success > 0) {
+        const failedEmails = new Set(result.failed.map((f) => f.email));
+        const rowsToAssign = rowsWithCourse.filter(
+          (r) => !failedEmails.has(r['이메일'].toString().trim()),
+        );
+        if (rowsToAssign.length > 0) {
+          const [coursesRes, usersRes] = await Promise.all([
+            coursesApi.getAll({ limit: 500 }),
+            usersApi.getAll({ limit: 500 }),
+          ]);
+          // courseId → [userId] 맵
+          const courseMap = new Map<string, string[]>();
+          for (const row of rowsToAssign) {
+            const courseName = row['과정명(선택)']!.toString().trim();
+            const course = coursesRes.data.find((c) => c.name === courseName);
+            const user = usersRes.data.find((u) => u.email === row['이메일'].toString().trim());
+            if (course && user) {
+              const ids = courseMap.get(course.id) ?? [];
+              ids.push(user.id);
+              courseMap.set(course.id, ids);
+            }
+          }
+          await Promise.all(
+            Array.from(courseMap.entries()).map(([courseId, userIds]) =>
+              coursesApi.bulkAssignUsers(courseId, userIds),
+            ),
+          );
+        }
+      }
+
       setUploadResult(result);
       setExcelPreview([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -255,6 +296,34 @@ export default function AdminUsersPage() {
       setPwResetError(err instanceof ApiError ? err.message : '비밀번호 초기화 중 오류가 발생했습니다.');
     } finally {
       setIsResettingPw(false);
+    }
+  };
+
+  // ── 과정 일괄 배정 ─────────────────────────────────────────
+  const openBulkCourseModal = async () => {
+    setBulkCourseSelectedId('');
+    setShowBulkCourseModal(true);
+    setIsLoadingCourses(true);
+    try {
+      const res = await coursesApi.getAll({ limit: 200 });
+      setAllCourses(res.data);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
+  const handleBulkAssignCourse = async () => {
+    if (!bulkCourseSelectedId) return;
+    setIsBulkAssigningCourse(true);
+    try {
+      await coursesApi.bulkAssignUsers(bulkCourseSelectedId, Array.from(selectedIds));
+      setShowBulkCourseModal(false);
+      setSelectedIds(new Set());
+      loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '과정 일괄 배정 중 오류가 발생했습니다.');
+    } finally {
+      setIsBulkAssigningCourse(false);
     }
   };
 
@@ -320,13 +389,22 @@ export default function AdminUsersPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selectedIds.size > 0 && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setShowBulkDeleteConfirm(true)}
-            >
-              선택 삭제 ({selectedIds.size}명)
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={openBulkCourseModal}
+              >
+                과정 배정 ({selectedIds.size}명)
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                선택 삭제 ({selectedIds.size}명)
+              </Button>
+            </>
           )}
           <Button
             variant="secondary"
@@ -398,7 +476,7 @@ export default function AdminUsersPage() {
               <table className="w-full text-[var(--text-muted)]">
                 <thead>
                   <tr className="border-b border-[var(--border-subtle)]">
-                    {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)'].map((h) => (
+                    {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)'].map((h) => (
                       <th key={h} className="pb-1.5 pr-4 text-left font-medium text-[var(--text-secondary)]">{h}</th>
                     ))}
                   </tr>
@@ -409,6 +487,7 @@ export default function AdminUsersPage() {
                     <td className="pt-1.5 pr-4">hong@example.com</td>
                     <td className="pt-1.5 pr-4">password123</td>
                     <td className="pt-1.5 pr-4 text-[#5e6ad2]">USER</td>
+                    <td className="pt-1.5 pr-4 text-[var(--text-faint)]">2025 클라우드 기초</td>
                   </tr>
                 </tbody>
               </table>
@@ -453,11 +532,16 @@ export default function AdminUsersPage() {
                   const role = row['권한(USER/ADMIN)']?.toString().toUpperCase();
                   return (
                     <div key={idx} className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2 text-xs last:border-0">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <span className="font-medium text-[var(--text-primary)]">{row['이름']}</span>
                         <span className="ml-2 text-[var(--text-muted)]">{row['이메일']}</span>
+                        {row['과정명(선택)']?.toString().trim() && (
+                          <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.1)] text-[#5e6ad2]">
+                            {row['과정명(선택)']}
+                          </span>
+                        )}
                       </div>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      <span className={`ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                         role === 'ADMIN' ? 'bg-[var(--bg-raised)] text-[#5e6ad2]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
                       }`}>
                         {role === 'ADMIN' ? '관리자' : '일반'}
@@ -656,6 +740,74 @@ export default function AdminUsersPage() {
               <Button variant="ghost" size="sm" onClick={() => setPwResetTarget(null)}>취소</Button>
               <Button variant="primary" size="sm" onClick={handlePwReset} disabled={isResettingPw}>
                 {isResettingPw ? '처리 중...' : '초기화'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 과정 일괄 배정 모달 ── */}
+      {showBulkCourseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowBulkCourseModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 일괄 배정</h2>
+            <p className="mb-4 text-sm text-[var(--text-muted)]">
+              선택한 <span className="font-medium text-[var(--text-secondary)]">{selectedIds.size}명</span>을 배정할 과정을 선택하세요.
+            </p>
+
+            {isLoadingCourses ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+              </div>
+            ) : allCourses.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 과정이 없습니다.</p>
+            ) : (
+              <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
+                {allCourses.map((course) => {
+                  const isSelected = bulkCourseSelectedId === course.id;
+                  return (
+                    <button
+                      key={course.id}
+                      onClick={() => setBulkCourseSelectedId(course.id)}
+                      className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                        isSelected
+                          ? 'border-[rgba(94,106,210,0.5)] bg-[rgba(94,106,210,0.08)]'
+                          : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                      }`}
+                    >
+                      <div>
+                        <p className={`font-medium ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                          {course.name}
+                        </p>
+                        {course.description && (
+                          <p className="mt-0.5 text-xs text-[var(--text-faint)] truncate max-w-[240px]">{course.description}</p>
+                        )}
+                        <p className="mt-0.5 text-xs text-[var(--text-faint)]">현재 {course._count.users}명</p>
+                      </div>
+                      {isSelected && (
+                        <svg className="h-4 w-4 shrink-0 text-[#5e6ad2]" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowBulkCourseModal(false)}>취소</Button>
+              <Button
+                size="sm"
+                disabled={!bulkCourseSelectedId || isBulkAssigningCourse}
+                isLoading={isBulkAssigningCourse}
+                onClick={handleBulkAssignCourse}
+              >
+                {selectedIds.size}명 배정
               </Button>
             </div>
           </div>

@@ -1,4 +1,3 @@
-// app/admin/exams/[id]/questions/page.tsx
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -7,7 +6,8 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import { examsApi } from '@/lib/api/exams';
 import { questionsApi } from '@/lib/api/questions';
-import { ExamDetail, Question } from '@/lib/types';
+import { submissionsApi } from '@/lib/api/submissions';
+import { ExamDetail, Question, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -45,6 +45,7 @@ const makeDefaultQuestion = (): QuestionForm => ({
 });
 
 type PanelMode = 'none' | 'add' | 'excel';
+type TabMode = 'questions' | 'assignments';
 
 export default function AdminQuestionsPage() {
   const { id: examId } = useParams<{ id: string }>();
@@ -54,6 +55,7 @@ export default function AdminQuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [tab, setTab] = useState<TabMode>('questions');
   const [panelMode, setPanelMode] = useState<PanelMode>('none');
   const [questionForms, setQuestionForms] = useState<QuestionForm[]>([makeDefaultQuestion()]);
   const [isAdding, setIsAdding] = useState(false);
@@ -66,6 +68,13 @@ export default function AdminQuestionsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 수강생별 배정 현황
+  const [examStatus, setExamStatus] = useState<ExamSubmissionStatus | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<ExamUserStatus | null>(null);
+  const [assignedQuestions, setAssignedQuestions] = useState<AssignedQuestion[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+
   const loadExam = () => {
     examsApi
       .getById(examId)
@@ -74,7 +83,42 @@ export default function AdminQuestionsPage() {
       .finally(() => setIsLoading(false));
   };
 
+  const loadExamStatus = () => {
+    setIsLoadingStatus(true);
+    submissionsApi
+      .getByExam(examId)
+      .then(setExamStatus)
+      .catch(() => setError('수강생 현황을 불러오는 데 실패했습니다.'))
+      .finally(() => setIsLoadingStatus(false));
+  };
+
   useEffect(() => { loadExam(); }, [examId]);
+
+  const handleTabChange = (t: TabMode) => {
+    setTab(t);
+    setSelectedStudent(null);
+    setAssignedQuestions([]);
+    if (t === 'assignments' && !examStatus) loadExamStatus();
+  };
+
+  const handleViewAssignment = async (student: ExamUserStatus) => {
+    if (selectedStudent?.userId === student.userId) {
+      setSelectedStudent(null);
+      setAssignedQuestions([]);
+      return;
+    }
+    setSelectedStudent(student);
+    setAssignedQuestions([]);
+    setIsLoadingQuestions(true);
+    try {
+      const questions = await submissionsApi.getUserAssignment(examId, student.userId);
+      setAssignedQuestions(questions);
+    } catch {
+      setAssignedQuestions([]);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
 
   const openPanel = (mode: PanelMode) => {
     setPanelMode((prev) => prev === mode ? 'none' : mode);
@@ -88,8 +132,6 @@ export default function AdminQuestionsPage() {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 4000);
   };
-
-  // ── 문제 폼 조작 ──────────────────────────────────────────
 
   const addQuestionCard = () => setQuestionForms((p) => [...p, makeDefaultQuestion()]);
   const removeQuestionCard = (qi: number) => setQuestionForms((p) => p.filter((_, i) => i !== qi));
@@ -108,8 +150,6 @@ export default function AdminQuestionsPage() {
       )
     );
 
-  // ── 일괄 등록 ────────────────────────────────────────────
-
   const handleBulkAdd = async () => {
     setError(null);
     for (let i = 0; i < questionForms.length; i++) {
@@ -118,7 +158,6 @@ export default function AdminQuestionsPage() {
       if (q.choices.some((c) => !c.content.trim())) { setError(`Q${i + 1}: 모든 선택지를 입력해주세요.`); return; }
       if (!q.choices.some((c) => c.isCorrect)) { setError(`Q${i + 1}: 정답을 최소 1개 이상 선택해주세요.`); return; }
     }
-
     setIsAdding(true);
     try {
       const currentCount = exam?.questions?.length ?? 0;
@@ -138,8 +177,6 @@ export default function AdminQuestionsPage() {
       setIsAdding(false);
     }
   };
-
-  // ── 엑셀 파싱 ────────────────────────────────────────────
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setExcelError(null);
@@ -240,26 +277,38 @@ export default function AdminQuestionsPage() {
       </div>
 
       {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">문제 관리</h1>
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">총 {exam?.questions?.length ?? 0}개 문제</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => openPanel('excel')}
+        {tab === 'questions' && (
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => openPanel('excel')}>
+              {panelMode === 'excel' ? '취소' : '엑셀 업로드'}
+            </Button>
+            <Button size="sm" onClick={() => openPanel('add')}>
+              {panelMode === 'add' ? '취소' : '+ 문제 추가'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* 탭 */}
+      <div className="mb-5 flex gap-1 border-b border-[var(--border)]">
+        {(['questions', 'assignments'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => handleTabChange(t)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === t
+                ? 'border-[#5e6ad2] text-[#5e6ad2]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
           >
-            {panelMode === 'excel' ? '취소' : '엑셀 업로드'}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => openPanel('add')}
-          >
-            {panelMode === 'add' ? '취소' : '+ 문제 추가'}
-          </Button>
-        </div>
+            {t === 'questions' ? '문제 목록' : '수강생별 배정 현황'}
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -273,242 +322,265 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
-      {/* ── 엑셀 업로드 패널 ── */}
-      {panelMode === 'excel' && (
-        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
-          <h2 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 업로드</h2>
-          <p className="mb-4 text-xs text-[var(--text-muted)]">
-            아래 컬럼 형식의 .xlsx 파일을 업로드하면 문제가 자동 등록됩니다.
-            <span className="ml-2 text-[#5e6ad2]">복수 정답은 쉼표로 구분 (예: 1,3)</span>
-          </p>
-
-          {/* 컬럼 형식 안내 */}
-          <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-3">
-            <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">엑셀 컬럼 형식</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-[var(--text-muted)]">
-                <thead>
-                  <tr className="border-b border-[var(--border-subtle)]">
-                    {['문제번호', '문제내용', '선택지1', '선택지2', '선택지3', '선택지4', '정답번호(1~4)'].map((h) => (
-                      <th key={h} className="pb-1.5 pr-3 text-left font-medium text-[var(--text-secondary)] whitespace-nowrap">{h}</th>
+      {/* ── 문제 목록 탭 ── */}
+      {tab === 'questions' && (
+        <>
+          {panelMode === 'excel' && (
+            <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+              <h2 className="mb-1 text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 업로드</h2>
+              <p className="mb-4 text-xs text-[var(--text-muted)]">
+                아래 컬럼 형식의 .xlsx 파일을 업로드하면 문제가 자동 등록됩니다.
+                <span className="ml-2 text-[#5e6ad2]">복수 정답은 쉼표로 구분 (예: 1,3)</span>
+              </p>
+              <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-3">
+                <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">엑셀 컬럼 형식</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-[var(--text-muted)]">
+                    <thead>
+                      <tr className="border-b border-[var(--border-subtle)]">
+                        {['문제번호', '문제내용', '선택지1', '선택지2', '선택지3', '선택지4', '정답번호(1~4)'].map((h) => (
+                          <th key={h} className="pb-1.5 pr-3 text-left font-medium text-[var(--text-secondary)] whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="text-[var(--text-faint)]">
+                      <tr>
+                        <td className="pt-1.5 pr-3">1</td>
+                        <td className="pt-1.5 pr-3">파이썬 리스트 정의 방법은?</td>
+                        <td className="pt-1.5 pr-3">a = (1,2)</td>
+                        <td className="pt-1.5 pr-3">a = [1,2]</td>
+                        <td className="pt-1.5 pr-3">{'a = {1,2}'}</td>
+                        <td className="pt-1.5 pr-3">a = &lt;1,2&gt;</td>
+                        <td className="pt-1.5 pr-3 font-bold text-[#5e6ad2]">2</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="mb-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileChange}
+                  className="block text-xs text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
+                />
+              </div>
+              {excelError && (
+                <div className="mb-3 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]">
+                  {excelError}
+                </div>
+              )}
+              {excelPreview.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">미리보기 ({excelPreview.length}개 문제)</p>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
+                    {excelPreview.map((row, idx) => (
+                      <div key={idx} className="border-b border-[var(--border-subtle)] px-4 py-2.5 last:border-0">
+                        <p className="text-xs font-medium text-[var(--text-primary)]">
+                          <span className="mr-2 text-[#5e6ad2]">Q{idx + 1}.</span>{row['문제내용']}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[var(--text-faint)]">
+                          ① {row['선택지1']} &nbsp;② {row['선택지2']} &nbsp;③ {row['선택지3']} &nbsp;④ {row['선택지4']}
+                          <span className="ml-2 text-green-500 font-medium">정답: {row['정답번호(1~4)']}번</span>
+                        </p>
+                      </div>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="text-[var(--text-faint)]">
-                  <tr>
-                    <td className="pt-1.5 pr-3">1</td>
-                    <td className="pt-1.5 pr-3">파이썬 리스트 정의 방법은?</td>
-                    <td className="pt-1.5 pr-3">a = (1,2)</td>
-                    <td className="pt-1.5 pr-3">a = [1,2]</td>
-                    <td className="pt-1.5 pr-3">{'a = {1,2}'}</td>
-                    <td className="pt-1.5 pr-3">a = &lt;1,2&gt;</td>
-                    <td className="pt-1.5 pr-3 font-bold text-[#5e6ad2]">2</td>
-                  </tr>
-                  <tr>
-                    <td className="pt-1 pr-3">2</td>
-                    <td className="pt-1 pr-3">정렬 알고리즘을 모두 고르시오</td>
-                    <td className="pt-1 pr-3">버블 정렬</td>
-                    <td className="pt-1 pr-3">DFS</td>
-                    <td className="pt-1 pr-3">퀵 정렬</td>
-                    <td className="pt-1 pr-3">BFS</td>
-                    <td className="pt-1 pr-3 font-bold text-[#5e6ad2]">1,3</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="block text-xs text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[#5e6ad2] file:px-3 file:py-1.5 file:text-white file:text-xs file:cursor-pointer hover:file:bg-[#6b78e5]"
-            />
-          </div>
-
-          {excelError && (
-            <div className="mb-3 rounded-md border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]">
-              {excelError}
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button size="sm" isLoading={isUploading} onClick={handleExcelUpload}>
+                      {excelPreview.length}개 문제 등록
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {excelPreview.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">미리보기 ({excelPreview.length}개 문제)</p>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
-                {excelPreview.map((row, idx) => {
-                  const ansStr = row['정답번호(1~4)']?.toString() ?? '';
-                  return (
-                    <div key={idx} className="border-b border-[var(--border-subtle)] px-4 py-2.5 last:border-0">
-                      <p className="text-xs font-medium text-[var(--text-primary)]">
-                        <span className="mr-2 text-[#5e6ad2]">Q{idx + 1}.</span>
-                        {row['문제내용']}
-                      </p>
-                      <p className="mt-1 text-[11px] text-[var(--text-faint)]">
-                        ① {row['선택지1']} &nbsp;② {row['선택지2']} &nbsp;③ {row['선택지3']} &nbsp;④ {row['선택지4']}
-                        <span className="ml-2 text-green-500 font-medium">정답: {ansStr}번</span>
-                      </p>
-                    </div>
-                  );
-                })}
+          {panelMode === 'add' && (
+            <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                  문제 추가
+                  <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{questionForms.length}개 작성 중</span>
+                </h2>
               </div>
-              <div className="mt-3 flex justify-end">
-                <Button size="sm" isLoading={isUploading} onClick={handleExcelUpload}>
-                  {excelPreview.length}개 문제 등록
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── 문제 일괄 추가 패널 ── */}
-      {panelMode === 'add' && (
-        <div className="mb-5 rounded-xl border border-[rgba(94,106,210,0.3)] bg-[var(--bg-surface)] p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              문제 추가
-              <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{questionForms.length}개 작성 중</span>
-            </h2>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {questionForms.map((qForm, qi) => (
-              <div key={qi} className="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-4">
-                {/* 문제 헤더 */}
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#5e6ad2]">Q{qi + 1}</span>
-                  {questionForms.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeQuestionCard(qi)}
-                      className="text-xs text-[var(--text-faint)] hover:text-[var(--danger-text)] transition-colors"
-                    >
-                      ✕ 삭제
-                    </button>
-                  )}
-                </div>
-
-                {/* 문제 내용 */}
-                <div className="mb-3">
-                  <Input
-                    label="문제 내용"
-                    value={qForm.content}
-                    onChange={(e) => updateContent(qi, e.target.value)}
-                    placeholder="문제를 입력하세요"
-                  />
-                </div>
-
-                {/* 선택지 */}
-                <p className="mb-2 text-xs text-[var(--text-muted)]">
-                  선택지 및 정답
-                  <span className="ml-1 text-[#5e6ad2]">(체크박스로 복수 정답 선택 가능)</span>
-                </p>
-                <div className="flex flex-col gap-2">
-                  {qForm.choices.map((choice, ci) => (
-                    <div key={ci} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleCorrect(qi, ci)}
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                          choice.isCorrect
-                            ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white'
-                            : 'border-[var(--border-hover)] bg-transparent'
-                        }`}
-                        title="정답으로 선택"
-                      >
-                        {choice.isCorrect && (
-                          <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </button>
-                      <input
-                        type="text"
-                        value={choice.content}
-                        onChange={(e) => updateChoice(qi, ci, e.target.value)}
-                        placeholder={`선택지 ${ci + 1}`}
-                        className={`flex-1 rounded-md border bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] focus:outline-none transition-colors ${
-                          choice.isCorrect
-                            ? 'border-[rgba(94,106,210,0.5)]'
-                            : 'border-[var(--border)] focus:border-[#5e6ad2]'
-                        }`}
-                      />
-                      {choice.isCorrect && (
-                        <span className="shrink-0 text-[10px] font-medium text-[#5e6ad2]">정답</span>
+              <div className="flex flex-col gap-4">
+                {questionForms.map((qForm, qi) => (
+                  <div key={qi} className="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#5e6ad2]">Q{qi + 1}</span>
+                      {questionForms.length > 1 && (
+                        <button type="button" onClick={() => removeQuestionCard(qi)} className="text-xs text-[var(--text-faint)] hover:text-[var(--danger-text)] transition-colors">
+                          ✕ 삭제
+                        </button>
                       )}
                     </div>
-                  ))}
-                </div>
+                    <div className="mb-3">
+                      <Input label="문제 내용" value={qForm.content} onChange={(e) => updateContent(qi, e.target.value)} placeholder="문제를 입력하세요" />
+                    </div>
+                    <p className="mb-2 text-xs text-[var(--text-muted)]">
+                      선택지 및 정답 <span className="ml-1 text-[#5e6ad2]">(체크박스로 복수 정답 선택 가능)</span>
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {qForm.choices.map((choice, ci) => (
+                        <div key={ci} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleCorrect(qi, ci)}
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${choice.isCorrect ? 'border-[#5e6ad2] bg-[#5e6ad2] text-white' : 'border-[var(--border-hover)] bg-transparent'}`}
+                          >
+                            {choice.isCorrect && (
+                              <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </button>
+                          <input
+                            type="text"
+                            value={choice.content}
+                            onChange={(e) => updateChoice(qi, ci, e.target.value)}
+                            placeholder={`선택지 ${ci + 1}`}
+                            className={`flex-1 rounded-md border bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] focus:outline-none transition-colors ${choice.isCorrect ? 'border-[rgba(94,106,210,0.5)]' : 'border-[var(--border)] focus:border-[#5e6ad2]'}`}
+                          />
+                          {choice.isCorrect && <span className="shrink-0 text-[10px] font-medium text-[#5e6ad2]">정답</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={addQuestionCard}>
-              + 문제 더 추가
-            </Button>
-            <Button type="button" size="sm" isLoading={isAdding} onClick={handleBulkAdd}>
-              {questionForms.length}개 문제 등록
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 문제 목록 ── */}
-      {!exam?.questions?.length ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-          <p className="text-sm text-[var(--text-muted)]">등록된 문제가 없습니다</p>
-          <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 문제를 추가하세요</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {exam.questions.map((q: Question, idx) => (
-            <div
-              key={q.id}
-              className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors"
-            >
-              <div className="flex items-start gap-4">
-                {/* 문제 번호 배지 */}
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--bg-raised)] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
-                  {idx + 1}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{q.content}</p>
-                    {q.answerCount > 1 && (
-                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[#5e6ad2]">
-                        복수 {q.answerCount}개
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    {q.choices.map((c) => (
-                      <p key={c.id} className="text-xs text-[var(--text-faint)]">
-                        {c.order}. {c.content}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setDeleteTargetId(q.id)}
-                  className="shrink-0"
-                >
-                  삭제
-                </Button>
+              <div className="mt-4 flex items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={addQuestionCard}>+ 문제 더 추가</Button>
+                <Button type="button" size="sm" isLoading={isAdding} onClick={handleBulkAdd}>{questionForms.length}개 문제 등록</Button>
               </div>
             </div>
-          ))}
+          )}
+
+          {!exam?.questions?.length ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+              <p className="text-sm text-[var(--text-muted)]">등록된 문제가 없습니다</p>
+              <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 문제를 추가하세요</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {exam.questions.map((q: Question, idx) => (
+                <div key={q.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--bg-raised)] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm font-medium text-[var(--text-primary)]">{q.content}</p>
+                        {q.answerCount > 1 && (
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[#5e6ad2]">복수 {q.answerCount}개</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {q.choices.map((c) => (
+                          <p key={c.id} className="text-xs text-[var(--text-faint)]">{c.order}. {c.content}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <Button variant="danger" size="sm" onClick={() => setDeleteTargetId(q.id)} className="shrink-0">삭제</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── 수강생별 배정 현황 탭 ── */}
+      {tab === 'assignments' && (
+        <div>
+          {isLoadingStatus ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+            </div>
+          ) : !examStatus || examStatus.users.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+              <p className="text-sm text-[var(--text-muted)]">배정된 수강생이 없습니다</p>
+              <p className="mt-1 text-xs text-[var(--text-faint)]">시험 관리에서 수강생을 배정하세요</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {examStatus.users.map((student) => {
+                const isExpanded = selectedStudent?.userId === student.userId;
+                return (
+                  <div key={student.userId} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] transition-colors">
+                    <div className="flex items-center gap-4 px-5 py-4">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-sm font-semibold text-[#5e6ad2]">
+                        {student.userName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-[var(--text-primary)]">{student.userName}</p>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            student.submitted
+                              ? 'bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]'
+                              : 'bg-[var(--bg-raised)] text-[var(--text-faint)]'
+                          }`}>
+                            {student.submitted ? '응시 완료' : '미응시'}
+                          </span>
+                          {student.submission && (
+                            <span className="text-xs text-[var(--text-muted)]">
+                              점수: <span className="font-medium text-[var(--text-primary)]">{student.submission.score ?? '-'}점</span>
+                              &nbsp;·&nbsp;{student.submission.totalQuestions}문제
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{student.userEmail}</p>
+                      </div>
+                      <Button
+                        variant={isExpanded ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={() => handleViewAssignment(student)}
+                        disabled={!student.submitted}
+                      >
+                        {!student.submitted ? '미응시' : isExpanded ? '접기' : '배정 문제 보기'}
+                      </Button>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="border-t border-[var(--border-subtle)] px-5 py-4">
+                        {isLoadingQuestions ? (
+                          <div className="flex items-center justify-center py-6">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+                          </div>
+                        ) : assignedQuestions.length === 0 ? (
+                          <p className="text-center text-xs text-[var(--text-muted)] py-4">배정 문제 정보가 없습니다.</p>
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                            <p className="text-xs font-medium text-[var(--text-secondary)]">배정된 문제 ({assignedQuestions.length}개)</p>
+                            {assignedQuestions.map((q, idx) => (
+                              <div key={q.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-4 py-3">
+                                <p className="text-sm font-medium text-[var(--text-primary)]">
+                                  <span className="mr-2 text-[10px] font-bold text-[#5e6ad2]">Q{idx + 1}.</span>
+                                  {q.content}
+                                </p>
+                                <div className="mt-2 flex flex-col gap-1">
+                                  {q.choices.map((c) => (
+                                    <p key={c.id} className={`text-xs ${c.isCorrect ? 'font-medium text-[var(--success-text)]' : 'text-[var(--text-faint)]'}`}>
+                                      {c.order}. {c.content} {c.isCorrect && '✓'}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* 삭제 확인 모달 */}
       <Modal
         isOpen={!!deleteTargetId}
         title="문제를 삭제하시겠습니까?"
