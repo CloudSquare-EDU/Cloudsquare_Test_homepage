@@ -30,9 +30,9 @@ export default function HomePage() {
     examsApi.getMy()
       .then((examList) => {
         const sorted = [...examList].sort((a, b) => {
-          const aDate = a.startDate ? new Date(a.startDate).getTime() : 0;
-          const bDate = b.startDate ? new Date(b.startDate).getTime() : 0;
-          if (bDate !== aDate) return bDate - aDate;
+          const aDate = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+          const bDate = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+          if (aDate !== bDate) return aDate - bDate;
           return a.title.localeCompare(b.title, 'ko', { numeric: true });
         });
         setExams(sorted);
