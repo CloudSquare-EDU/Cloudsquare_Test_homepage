@@ -244,7 +244,7 @@ export const getMySubmissions = async (userId: string) => {
 
 // 응시 결과 상세 조회
 // 설계 포인트: 백엔드에서 answer 레코드를 questionResults 형태로 가공해서 반환
-//   → 클라이언트가 answer.question ?? answer.bankQuestion 조인할 필요 없음
+//   → 미응답 문제(타이머 만료 시)도 할당된 문제 순서대로 포함
 export const getSubmissionById = async (id: string, userId: string, isAdmin: boolean) => {
   const submission = await prisma.submission.findUnique({
     where: { id },
@@ -267,9 +267,8 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
     throw new AppError(403, ErrorCode.FORBIDDEN, '접근 권한이 없습니다.');
   }
 
-  // ── 문제별로 answer 레코드를 그룹화 ────────────────────────────
   type ChoiceResult = { id: string; content: string; isCorrect: boolean; isSelected: boolean };
-  type QuestionResult = { key: string; content: string; isCorrect: boolean; choices: ChoiceResult[] };
+  type QuestionResult = { key: string; content: string; isCorrect: boolean; isAnswered: boolean; choices: ChoiceResult[] };
 
   const questionMap = new Map<string, QuestionResult>();
 
@@ -278,7 +277,7 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
     const selectedId = answer.choice?.id ?? answer.bankChoice?.id ?? null;
     const key = answer.questionId ?? answer.bankQuestionId ?? null;
 
-    if (!q || !key) continue; // 문제 정보 없으면 스킵
+    if (!q || !key) continue;
 
     if (!questionMap.has(key)) {
       const choices: ChoiceResult[] = (q.choices as Array<{ id: string; content: string; isCorrect: boolean }>).map((ch) => ({
@@ -291,11 +290,11 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
         key,
         content: q.content,
         isCorrect: answer.isCorrect,
+        isAnswered: true,
         choices,
       });
     }
 
-    // 사용자가 선택한 선택지 표시
     if (selectedId) {
       const qr = questionMap.get(key)!;
       const idx = qr.choices.findIndex((ch) => ch.id === selectedId);
@@ -305,13 +304,77 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
     }
   }
 
+  // 시험 정보 조회 — 미응답 문제 포함을 위해
+  const examDetail = await prisma.exam.findUnique({
+    where: { id: submission.examId },
+    select: {
+      questionBankId: true,
+      questions: { include: { choices: { orderBy: { order: 'asc' } } }, orderBy: { order: 'asc' } },
+    },
+  });
+
+  let orderedKeys: string[] = [];
+
+  if (examDetail?.questionBankId) {
+    // 문제은행 기반: 이 수강생에게 배정된 문제 목록 (assignedOrder 순)
+    const assigned = await prisma.userExamQuestion.findMany({
+      where: { userId: submission.userId, examId: submission.examId },
+      include: { bankQuestion: { include: { choices: { orderBy: { order: 'asc' } } } } },
+      orderBy: { assignedOrder: 'asc' },
+    });
+
+    for (const ueq of assigned) {
+      const key = ueq.bankQuestionId;
+      orderedKeys.push(key);
+      if (!questionMap.has(key)) {
+        const q = ueq.bankQuestion;
+        questionMap.set(key, {
+          key,
+          content: q.content,
+          isCorrect: false,
+          isAnswered: false,
+          choices: q.choices.map((ch) => ({
+            id: ch.id,
+            content: ch.content,
+            isCorrect: ch.isCorrect,
+            isSelected: false,
+          })),
+        });
+      }
+    }
+  } else if (examDetail?.questions) {
+    // 수동 문제 시험: 시험에 포함된 전체 문제
+    for (const q of examDetail.questions) {
+      orderedKeys.push(q.id);
+      if (!questionMap.has(q.id)) {
+        questionMap.set(q.id, {
+          key: q.id,
+          content: q.content,
+          isCorrect: false,
+          isAnswered: false,
+          choices: q.choices.map((ch) => ({
+            id: ch.id,
+            content: ch.content,
+            isCorrect: ch.isCorrect,
+            isSelected: false,
+          })),
+        });
+      }
+    }
+  }
+
+  // orderedKeys 순서대로 결과 반환 (순서 정보가 없으면 삽입 순서 유지)
+  const questionResults = orderedKeys.length > 0
+    ? orderedKeys.map((k) => questionMap.get(k)!).filter(Boolean)
+    : Array.from(questionMap.values());
+
   return {
     id: submission.id,
     exam: submission.exam,
     score: submission.score,
     totalQuestions: submission.totalQuestions,
     submittedAt: submission.submittedAt,
-    questionResults: Array.from(questionMap.values()),
+    questionResults,
   };
 };
 

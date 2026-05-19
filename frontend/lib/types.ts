@@ -96,6 +96,7 @@ export interface QuestionResult {
   key: string;         // questionId 또는 bankQuestionId
   content: string;     // 문제 내용
   isCorrect: boolean;
+  isAnswered: boolean; // 미응답(타이머 만료) 여부
   choices: Array<{
     id: string;
     content: string;

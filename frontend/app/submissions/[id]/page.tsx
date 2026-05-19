@@ -40,6 +40,8 @@ export default function SubmissionDetailPage() {
 
   const { questionResults, score, totalQuestions, submittedAt, exam } = submission;
   const correctCount = questionResults.filter((q) => q.isCorrect).length;
+  const unansweredCount = questionResults.filter((q) => q.isAnswered === false).length;
+  const wrongCount = totalQuestions - correctCount - unansweredCount;
   const finalScore = score ?? Math.round((correctCount / totalQuestions) * 100);
   const scoreColor =
     finalScore >= 80
@@ -80,8 +82,14 @@ export default function SubmissionDetailPage() {
           </div>
           <div className="flex items-center gap-2 text-sm">
             <span className="h-2 w-2 rounded-full bg-red-500" />
-            <span className="text-[var(--text-secondary)]">오답 {totalQuestions - correctCount}문제</span>
+            <span className="text-[var(--text-secondary)]">오답 {wrongCount}문제</span>
           </div>
+          {unansweredCount > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="h-2 w-2 rounded-full bg-gray-400" />
+              <span className="text-[var(--text-faint)]">미응답 {unansweredCount}문제</span>
+            </div>
+          )}
           <div className="text-xs text-[var(--text-muted)]">총 {totalQuestions}문제</div>
         </div>
       </div>
@@ -94,11 +102,14 @@ export default function SubmissionDetailPage() {
       <div className="flex flex-col gap-2">
         {questionResults.map((qr, idx) => {
           const isMulti = qr.choices.filter((c) => c.isCorrect).length > 1;
+          const isUnanswered = qr.isAnswered === false;
           return (
             <div
               key={qr.key}
               className={`rounded-lg border px-4 py-4 ${
-                qr.isCorrect
+                isUnanswered
+                  ? 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
+                  : qr.isCorrect
                   ? 'border-[var(--success-border)] bg-[var(--success-bg)]'
                   : 'border-[rgba(248,113,113,0.15)] bg-[var(--danger-bg)]'
               }`}
@@ -106,12 +117,14 @@ export default function SubmissionDetailPage() {
               <div className="mb-3 flex items-start gap-2">
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                    qr.isCorrect
+                    isUnanswered
+                      ? 'bg-[var(--bg-raised)] text-[var(--text-faint)]'
+                      : qr.isCorrect
                       ? 'bg-green-900/50 text-[var(--success-text)]'
                       : 'bg-red-900/50 text-[var(--danger-text)]'
                   }`}
                 >
-                  {qr.isCorrect ? '정답' : '오답'}
+                  {isUnanswered ? '미응답' : qr.isCorrect ? '정답' : '오답'}
                 </span>
                 {isMulti && (
                   <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[#8090d8]">
@@ -131,7 +144,7 @@ export default function SubmissionDetailPage() {
                     suffix = ' ✓';
                   } else if (choice.isCorrect && !choice.isSelected) {
                     cls = 'text-sm font-medium text-green-600';
-                    suffix = ' ✓ (정답)';
+                    suffix = isUnanswered ? ' ✓ (정답)' : ' ✓ (정답)';
                   } else if (!choice.isCorrect && choice.isSelected) {
                     cls = 'text-sm text-red-500 line-through';
                     suffix = ' ✗';
