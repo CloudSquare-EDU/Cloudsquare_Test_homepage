@@ -51,14 +51,14 @@ export default function SubmissionDetailPage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-xs text-[var(--text-muted)] mb-1">
             {new Date(submittedAt).toLocaleString('ko-KR')} 제출
           </p>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">{exam.title}</h1>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)] break-words">{exam.title}</h1>
         </div>
-        <Link href="/submissions">
+        <Link href="/submissions" className="shrink-0">
           <Button variant="ghost" size="sm">← 기록 목록</Button>
         </Link>
       </div>
@@ -87,9 +87,9 @@ export default function SubmissionDetailPage() {
       </div>
 
       {/* 정오표 */}
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">문제별 결과</h2>
-        <span className="text-xs text-[var(--text-faint)]">— 정답은 ✓, 내가 선택한 오답은 취소선</span>
+        <span className="hidden sm:inline text-xs text-[var(--text-faint)]">— 정답은 ✓, 내가 선택한 오답은 취소선</span>
       </div>
       <div className="flex flex-col gap-2">
         {questionResults.map((qr, idx) => {
@@ -118,7 +118,7 @@ export default function SubmissionDetailPage() {
                     복수정답
                   </span>
                 )}
-                <p className="text-sm font-medium text-[var(--text-primary)]">
+                <p className="text-sm font-medium text-[var(--text-primary)] break-words">
                   Q{idx + 1}. {qr.content}
                 </p>
               </div>

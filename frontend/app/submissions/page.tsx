@@ -61,7 +61,7 @@ export default function SubmissionsPage() {
               {/* 시험 정보 */}
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-[var(--text-primary)] truncate">{s.exam.title}</p>
-                <div className="mt-0.5 flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">
                   <span>{s.totalQuestions}문제</span>
                   <span>·</span>
                   <span>{new Date(s.submittedAt).toLocaleString('ko-KR', {
