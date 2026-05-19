@@ -270,10 +270,10 @@ export default function AdminQuestionsPage() {
   return (
     <div>
       {/* 브레드크럼 */}
-      <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
-        <Link href="/admin/exams" className="hover:text-[var(--text-secondary)] transition-colors">시험 관리</Link>
-        <span>›</span>
-        <span className="text-[var(--text-secondary)]">{exam?.title}</span>
+      <div className="mb-3 flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-[var(--text-faint)]">
+        <Link href="/admin/exams" className="shrink-0 hover:text-[var(--text-secondary)] transition-colors">시험 관리</Link>
+        <span className="shrink-0">›</span>
+        <span className="truncate text-[var(--text-secondary)]">{exam?.title}</span>
       </div>
 
       {/* 헤더 */}
@@ -306,7 +306,7 @@ export default function AdminQuestionsPage() {
                 : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
-            {t === 'questions' ? '문제 목록' : '수강생별 배정 현황'}
+            {t === 'questions' ? '전체 문제' : '수강생별 배정 현황'}
           </button>
         ))}
       </div>

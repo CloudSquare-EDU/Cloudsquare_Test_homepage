@@ -828,23 +828,23 @@ export default function AdminUsersPage() {
             </p>
 
             {/* 현재 과정 표시 */}
-            <div className="mb-4 flex items-center gap-2">
+            <div className="mb-4">
               <span className="text-xs text-[var(--text-faint)]">현재 과정:</span>
               {courseTarget.course ? (
-                <div className="flex items-center gap-2">
-                  <span className="rounded px-2 py-0.5 text-xs font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
+                <div className="mt-1 flex min-w-0 items-start gap-2">
+                  <span className="min-w-0 break-words rounded px-2 py-0.5 text-xs font-medium bg-[rgba(94,106,210,0.12)] text-[#5e6ad2] border border-[rgba(94,106,210,0.25)]">
                     {courseTarget.course.name}
                   </span>
                   <button
                     onClick={handleRemoveCourse}
                     disabled={isAssigningCourse}
-                    className="text-[10px] text-[var(--danger-text)] hover:underline disabled:opacity-50"
+                    className="shrink-0 text-[10px] text-[var(--danger-text)] hover:underline disabled:opacity-50"
                   >
                     해제
                   </button>
                 </div>
               ) : (
-                <span className="text-xs text-[var(--text-faint)]">없음</span>
+                <span className="ml-2 text-xs text-[var(--text-faint)]">없음</span>
               )}
             </div>
 
@@ -863,25 +863,25 @@ export default function AdminUsersPage() {
                       key={course.id}
                       onClick={() => handleAssignCourse(course.id)}
                       disabled={isAssigningCourse || isSelected}
-                      className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:cursor-default ${
+                      className={`flex items-start justify-between gap-2 rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:cursor-default ${
                         isSelected
                           ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)] opacity-80'
                           : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
                       }`}
                     >
-                      <div>
-                        <p className={`font-medium ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`break-words font-medium ${isSelected ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
                           {course.name}
                         </p>
                         {course.description && (
-                          <p className="mt-0.5 text-xs text-[var(--text-faint)] truncate max-w-[240px]">{course.description}</p>
+                          <p className="mt-0.5 text-xs text-[var(--text-faint)] line-clamp-2">{course.description}</p>
                         )}
                         <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                          사용자 {course._count.users}명 
+                          사용자 {course._count.users}명
                         </p>
                       </div>
                       {isSelected && (
-                        <span className="text-xs text-[#5e6ad2]">현재 과정</span>
+                        <span className="shrink-0 text-xs text-[#5e6ad2]">현재 과정</span>
                       )}
                     </button>
                   );
