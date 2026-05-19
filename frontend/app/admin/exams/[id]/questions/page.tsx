@@ -7,7 +7,8 @@ import * as XLSX from 'xlsx';
 import { examsApi } from '@/lib/api/exams';
 import { questionsApi } from '@/lib/api/questions';
 import { submissionsApi } from '@/lib/api/submissions';
-import { ExamDetail, Question, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } from '@/lib/types';
+import { questionBanksApi } from '@/lib/api/questionBanks';
+import { ExamDetail, Question, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion, QuestionBankDetail } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -68,6 +69,10 @@ export default function AdminQuestionsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 문제은행 기반 시험용 — 은행 전체 문제
+  const [bankDetail, setBankDetail] = useState<QuestionBankDetail | null>(null);
+  const [isLoadingBank, setIsLoadingBank] = useState(false);
+
   // 수강생별 배정 현황
   const [examStatus, setExamStatus] = useState<ExamSubmissionStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
@@ -93,6 +98,15 @@ export default function AdminQuestionsPage() {
   };
 
   useEffect(() => { loadExam(); }, [examId]);
+
+  useEffect(() => {
+    if (!exam?.isBankBased || !exam.questionBankId) return;
+    setIsLoadingBank(true);
+    questionBanksApi.getById(exam.questionBankId)
+      .then(setBankDetail)
+      .catch(() => {})
+      .finally(() => setIsLoadingBank(false));
+  }, [exam?.questionBankId, exam?.isBankBased]);
 
   const handleTabChange = (t: TabMode) => {
     setTab(t);
@@ -280,9 +294,13 @@ export default function AdminQuestionsPage() {
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">문제 관리</h1>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">총 {exam?.questions?.length ?? 0}개 문제</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
+            {exam?.isBankBased
+              ? `문제은행 총 ${bankDetail?._count.questions ?? '..'}개 문제 · 수강생별 ${exam.questionCount ?? '?'}개 랜덤 배정`
+              : `총 ${exam?.questions?.length ?? 0}개 문제`}
+          </p>
         </div>
-        {tab === 'questions' && (
+        {tab === 'questions' && !exam?.isBankBased && (
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => openPanel('excel')}>
               {panelMode === 'excel' ? '취소' : '엑셀 업로드'}
@@ -457,7 +475,47 @@ export default function AdminQuestionsPage() {
             </div>
           )}
 
-          {!exam?.questions?.length ? (
+          {exam?.isBankBased ? (
+            isLoadingBank ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+              </div>
+            ) : !bankDetail?.questions?.length ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+                <p className="text-sm text-[var(--text-muted)]">문제은행에 등록된 문제가 없습니다</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {bankDetail.questions.map((q, idx) => {
+                  const correctCount = q.choices.filter((c) => c.isCorrect).length;
+                  return (
+                    <div key={q.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--bg-raised)] text-[10px] font-bold text-[#5e6ad2] mt-0.5">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <p className="text-sm font-medium text-[var(--text-primary)]">{q.content}</p>
+                            {correctCount > 1 && (
+                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[#5e6ad2]">복수 {correctCount}개</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            {q.choices.map((c) => (
+                              <p key={c.id} className={`text-xs ${c.isCorrect ? 'font-medium text-[var(--success-text)]' : 'text-[var(--text-faint)]'}`}>
+                                {c.order}. {c.content}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : !exam?.questions?.length ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
               <p className="text-sm text-[var(--text-muted)]">등록된 문제가 없습니다</p>
               <p className="mt-1 text-xs text-[var(--text-faint)]">위 버튼으로 문제를 추가하세요</p>

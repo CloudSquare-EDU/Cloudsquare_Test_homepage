@@ -753,7 +753,7 @@ export default function AdminUsersPage() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setShowBulkCourseModal(false)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-w-xl rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
             <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 일괄 배정</h2>
             <p className="mb-4 text-sm text-[var(--text-muted)]">
               선택한 <span className="font-medium text-[var(--text-secondary)]">{selectedIds.size}명</span>을 배정할 과정을 선택하세요.
@@ -821,7 +821,7 @@ export default function AdminUsersPage() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setCourseTarget(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-w-xl rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
             <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 배정</h2>
             <p className="mb-1 text-sm text-[var(--text-muted)]">
               <span className="text-[var(--text-secondary)]">{courseTarget.name}</span>을(를) 배정할 과정을 선택하세요.

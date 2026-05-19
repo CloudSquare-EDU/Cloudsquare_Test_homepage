@@ -497,7 +497,7 @@ export default function AdminExamsPage() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setCourseTarget(null)}
           />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-w-xl rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
             <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">과정 변경</h2>
             <p className="mb-1 break-words text-sm text-[var(--text-muted)]">
               <span className="text-[var(--text-secondary)]">{courseTarget.title}</span>을(를) 매핑할 과정을 선택하세요.
