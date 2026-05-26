@@ -130,7 +130,7 @@ export const getAllExams = async (params: {
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { title: 'asc' },
       include: {
         _count: { select: { questions: true, submissions: true } },
         course: { select: { id: true, name: true } },
