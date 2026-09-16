@@ -137,12 +137,19 @@ model User {
 // questionBankId: 문제은행 연결 시 은행 기반 출제
 // questionCount:  문제은행에서 사용자별 추첨할 문제 수
 // ─────────────────────────────────────────
+// 시험 유형: 자기주도학습(수강생 본인이 정오답 확인 가능) / 실제시험(운영진만 결과 확인, 점수 비공개)
+enum ExamType {
+  SELF_STUDY
+  REAL_EXAM
+}
+
 model Exam {
   id             String    @id @default(cuid())
   title          String
   description    String?
   duration       Int
   isPublished    Boolean   @default(false)
+  examType       ExamType  @default(SELF_STUDY) // 자기주도학습 vs 실제시험 — 실제시험은 수강생에게 점수/정오표 비공개
   courseId       String?
   questionBankId String?   // 문제은행 연결 (null이면 수동 문제)
   questionCount  Int?      // 사용자별 출제 문제 수 (문제은행 사용 시)

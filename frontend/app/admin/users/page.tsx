@@ -114,6 +114,10 @@ export default function AdminUsersPage() {
   const [showBulkCourseModal, setShowBulkCourseModal] = useState(false);
   const [bulkCourseSelectedId, setBulkCourseSelectedId] = useState<string>('');
   const [isBulkAssigningCourse, setIsBulkAssigningCourse] = useState(false);
+  const [bulkCourseSearch, setBulkCourseSearch] = useState('');
+
+  // 과정 배정 모달(단일) 검색어 — 과정이 많아지면 스크롤 대신 검색으로 찾도록
+  const [courseModalSearch, setCourseModalSearch] = useState('');
 
   const loadUsers = (p = page, s = search) => {
     setIsLoading(true);
@@ -273,17 +277,24 @@ export default function AdminUsersPage() {
   };
 
   // ── 과정 일괄 배정 ─────────────────────────────────────────
-  const openBulkCourseModal = async () => {
+  const openBulkCourseModal = () => {
     setBulkCourseSelectedId('');
+    setBulkCourseSearch('');
     setShowBulkCourseModal(true);
-    setIsLoadingCourses(true);
-    try {
-      const res = await coursesApi.getAll({ limit: 200 });
-      setAllCourses(res.data);
-    } finally {
-      setIsLoadingCourses(false);
-    }
   };
+
+  // 과정이 많아져 한 번에 다 보여주기 어려우므로, 검색어 입력 시 서버에 재조회(디바운스)
+  // — 목록 API가 최대 100건까지만 내려주므로 검색으로 좁혀야 100건 밖의 과정도 찾을 수 있다.
+  useEffect(() => {
+    if (!showBulkCourseModal) return;
+    setIsLoadingCourses(true);
+    const t = setTimeout(() => {
+      coursesApi.getAll({ limit: 100, search: bulkCourseSearch || undefined })
+        .then((res) => setAllCourses(res.data))
+        .finally(() => setIsLoadingCourses(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [showBulkCourseModal, bulkCourseSearch]);
 
   const handleBulkAssignCourse = async () => {
     if (!bulkCourseSelectedId) return;
@@ -301,16 +312,22 @@ export default function AdminUsersPage() {
   };
 
   // ── 과정 배정 ───────────────────────────────────────────────
-  const openCourseModal = async (user: UserSummary) => {
+  const openCourseModal = (user: UserSummary) => {
     setCourseTarget(user);
-    setIsLoadingCourses(true);
-    try {
-      const res = await coursesApi.getAll({ limit: 200 });
-      setAllCourses(res.data);
-    } finally {
-      setIsLoadingCourses(false);
-    }
+    setCourseModalSearch('');
   };
+
+  // 검색어 입력 시 서버에 재조회(디바운스) — 과정이 많아졌을 때 스크롤 대신 검색으로 찾도록
+  useEffect(() => {
+    if (!courseTarget) return;
+    setIsLoadingCourses(true);
+    const t = setTimeout(() => {
+      coursesApi.getAll({ limit: 100, search: courseModalSearch || undefined })
+        .then((res) => setAllCourses(res.data))
+        .finally(() => setIsLoadingCourses(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [courseTarget, courseModalSearch]);
 
   const handleAssignCourse = async (courseId: string) => {
     if (!courseTarget) return;
@@ -743,12 +760,22 @@ export default function AdminUsersPage() {
               선택한 <span className="font-medium text-[var(--text-secondary)]">{selectedIds.size}명</span>을 배정할 과정을 선택하세요.
             </p>
 
+            <Input
+              placeholder="과정명 검색..."
+              value={bulkCourseSearch}
+              onChange={(e) => setBulkCourseSearch(e.target.value)}
+              className="mb-3"
+              autoFocus
+            />
+
             {isLoadingCourses ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
               </div>
             ) : allCourses.length === 0 ? (
-              <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 과정이 없습니다.</p>
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                {bulkCourseSearch ? `"${bulkCourseSearch}" 검색 결과가 없습니다.` : '등록된 과정이 없습니다.'}
+              </p>
             ) : (
               <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
                 {allCourses.map((course) => {
@@ -832,12 +859,22 @@ export default function AdminUsersPage() {
               )}
             </div>
 
+            <Input
+              placeholder="과정명 검색..."
+              value={courseModalSearch}
+              onChange={(e) => setCourseModalSearch(e.target.value)}
+              className="mb-3"
+              autoFocus
+            />
+
             {isLoadingCourses ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
               </div>
             ) : allCourses.length === 0 ? (
-              <p className="py-4 text-center text-sm text-[var(--text-muted)]">등록된 과정이 없습니다.</p>
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                {courseModalSearch ? `"${courseModalSearch}" 검색 결과가 없습니다.` : '등록된 과정이 없습니다.'}
+              </p>
             ) : (
               <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
                 {allCourses.map((course) => {

@@ -53,14 +53,23 @@ export default function SubmissionsPage() {
               key={s.id}
               className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-5 py-4 hover:border-[var(--border-hover)] hover:bg-[var(--bg-raised)] transition-colors"
             >
-              {/* 점수 */}
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${scoreBg(s.score)} ${scoreColor(s.score)}`}>
-                {s.score ?? '-'}
+              {/* 점수 (실제시험은 비공개) */}
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
+                s.resultHidden ? 'bg-[var(--bg-raised)] text-[var(--text-faint)]' : `${scoreBg(s.score)} ${scoreColor(s.score)}`
+              }`}>
+                {s.resultHidden ? '🔒' : (s.score ?? '-')}
               </div>
 
               {/* 시험 정보 */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[var(--text-primary)] truncate">{s.exam.title}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-medium text-[var(--text-primary)] truncate">{s.exam.title}</p>
+                  {s.resultHidden && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                      결과 비공개
+                    </span>
+                  )}
+                </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">
                   <span>{s.totalQuestions}문제</span>
                   <span>·</span>

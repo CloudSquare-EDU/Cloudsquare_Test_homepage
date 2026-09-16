@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration, toDatetimeLocalValue } from '@/lib/utils';
 
 const PAGE_LIMIT = 20;
 
@@ -25,7 +25,7 @@ export default function AdminExamsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
+  const [form, setForm] = useState({ title: '', description: '', duration: 3600, examType: 'SELF_STUDY' as 'SELF_STUDY' | 'REAL_EXAM', courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -45,11 +45,32 @@ export default function AdminExamsPage() {
   const [dateForm, setDateForm] = useState({ startDate: '', deadline: '' });
   const [isSavingDate, setIsSavingDate] = useState(false);
 
+  // 시험 유형 변경 모달
+  const [typeTarget, setTypeTarget] = useState<AdminExam | null>(null);
+  const [isSavingType, setIsSavingType] = useState(false);
+
+  const handleChangeType = async (examType: 'SELF_STUDY' | 'REAL_EXAM') => {
+    if (!typeTarget) return;
+    setIsSavingType(true);
+    try {
+      await examsApi.update(typeTarget.id, { examType });
+      setTypeTarget(null);
+      loadExams();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '유형 변경 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingType(false);
+    }
+  };
+
   const openDateModal = (exam: AdminExam) => {
     setDateTarget(exam);
     setDateForm({
-      startDate: exam.startDate ? new Date(exam.startDate).toISOString().slice(0, 16) : '',
-      deadline: exam.deadline ? new Date(exam.deadline).toISOString().slice(0, 16) : '',
+      // datetime-local input은 로컬 시각 문자열을 기대하므로 반드시 이 변환을 거쳐야 함
+      // (그냥 toISOString()만 쓰면 UTC 시각이 로컬 시각처럼 표시되어, 손대지 않고 저장해도
+      //  시간대 차이만큼 실제 시각이 어긋나버리는 버그가 있었음)
+      startDate: exam.startDate ? toDatetimeLocalValue(exam.startDate) : '',
+      deadline: exam.deadline ? toDatetimeLocalValue(exam.deadline) : '',
     });
   };
 
@@ -114,6 +135,7 @@ export default function AdminExamsPage() {
         title: form.title,
         description: form.description || undefined,
         duration: form.duration,
+        examType: form.examType,
         questionBankId: form.questionBankId || undefined,
         questionCount: form.questionCount ? parseInt(form.questionCount, 10) : undefined,
         startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
@@ -124,7 +146,7 @@ export default function AdminExamsPage() {
         await coursesApi.assignExam(form.courseId, created.id);
       }
       setShowCreate(false);
-      setForm({ title: '', description: '', duration: 3600, courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
+      setForm({ title: '', description: '', duration: 3600, examType: 'SELF_STUDY', courseId: '', questionBankId: '', questionCount: '', startDate: '', deadline: '' });
       loadExams();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '생성 중 오류가 발생했습니다.');
@@ -226,6 +248,39 @@ export default function AdminExamsPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="시험에 대한 간단한 설명"
             />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">시험 유형</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, examType: 'SELF_STUDY' })}
+                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors ${
+                    form.examType === 'SELF_STUDY'
+                      ? 'border-[rgba(94,106,210,0.5)] bg-[rgba(94,106,210,0.08)]'
+                      : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                  }`}
+                >
+                  <p className={`font-medium ${form.examType === 'SELF_STUDY' ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                    자기주도학습
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">수강생 본인이 정오답·점수 확인 가능</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, examType: 'REAL_EXAM' })}
+                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors ${
+                    form.examType === 'REAL_EXAM'
+                      ? 'border-[rgba(217,119,6,0.5)] bg-[var(--warning-bg)]'
+                      : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                  }`}
+                >
+                  <p className={`font-medium ${form.examType === 'REAL_EXAM' ? 'text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'}`}>
+                    실제 시험
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">점수·정오표는 운영진만 확인 (수강생 비공개)</p>
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[var(--text-secondary)]">제한 시간</label>
               <div className="flex items-center gap-2">
@@ -372,6 +427,13 @@ export default function AdminExamsPage() {
                   {/* 제목 + 배지 */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="font-medium text-[var(--text-primary)] break-all">{exam.title}</p>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      exam.examType === 'REAL_EXAM'
+                        ? 'bg-[var(--warning-bg)] text-[var(--warning-text)] border border-[var(--warning-border)]'
+                        : 'bg-[rgba(94,106,210,0.1)] text-[#8090d8]'
+                    }`}>
+                      {exam.examType === 'REAL_EXAM' ? '실제시험 · 비공개' : '자기주도학습'}
+                    </span>
                     {exam.questionBank && (
                       <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(110,180,110,0.12)] text-[#4a9e5c] border border-[rgba(110,180,110,0.25)]">
                         🏦 {exam.questionBank.name}
@@ -417,6 +479,9 @@ export default function AdminExamsPage() {
 
               {/* 액션 버튼: 모바일-하단분리 / 데스크탑-우측인라인 */}
               <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => setTypeTarget(exam)}>
+                  유형 변경
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => openDateModal(exam)}>
                   기간 설정
                 </Button>
@@ -485,6 +550,52 @@ export default function AdminExamsPage() {
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setDateTarget(null)}>취소</Button>
               <Button size="sm" onClick={handleSaveDates} isLoading={isSavingDate}>저장</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 시험 유형 변경 모달 ── */}
+      {typeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setTypeTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">시험 유형 변경</h2>
+            <p className="mb-4 text-sm text-[var(--text-muted)] truncate">{typeTarget.title}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={isSavingType}
+                onClick={() => handleChangeType('SELF_STUDY')}
+                className={`rounded-lg border px-3 py-2.5 text-left text-xs transition-colors disabled:opacity-60 ${
+                  typeTarget.examType === 'SELF_STUDY'
+                    ? 'border-[rgba(94,106,210,0.5)] bg-[rgba(94,106,210,0.08)]'
+                    : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                }`}
+              >
+                <p className={`font-medium ${typeTarget.examType === 'SELF_STUDY' ? 'text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}`}>
+                  자기주도학습 {typeTarget.examType === 'SELF_STUDY' && '(현재)'}
+                </p>
+                <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">수강생 본인이 정오답·점수 확인 가능</p>
+              </button>
+              <button
+                type="button"
+                disabled={isSavingType}
+                onClick={() => handleChangeType('REAL_EXAM')}
+                className={`rounded-lg border px-3 py-2.5 text-left text-xs transition-colors disabled:opacity-60 ${
+                  typeTarget.examType === 'REAL_EXAM'
+                    ? 'border-[rgba(217,119,6,0.5)] bg-[var(--warning-bg)]'
+                    : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
+                }`}
+              >
+                <p className={`font-medium ${typeTarget.examType === 'REAL_EXAM' ? 'text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'}`}>
+                  실제 시험 {typeTarget.examType === 'REAL_EXAM' && '(현재)'}
+                </p>
+                <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">점수·정오표는 운영진만 확인 (수강생 비공개)</p>
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setTypeTarget(null)} disabled={isSavingType}>닫기</Button>
             </div>
           </div>
         </div>

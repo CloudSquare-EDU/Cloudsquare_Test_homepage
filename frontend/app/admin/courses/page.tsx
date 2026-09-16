@@ -51,6 +51,7 @@ export default function AdminCoursesPage() {
   const [assignUserCourseId, setAssignUserCourseId] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<UserSummary[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [assignUserSearch, setAssignUserSearch] = useState('');
 
   // 시험 배정 모달
   const [assignExamCourseId, setAssignExamCourseId] = useState<string | null>(null);
@@ -179,16 +180,26 @@ export default function AdminCoursesPage() {
   };
 
   // ── 사용자 배정 모달 ─────────────────────────────────────────
-  const openAssignUsers = async (courseId: string) => {
+  // 사용자가 많아지면 스크롤로 찾기 어려우므로, 검색어 입력 시 서버에서 재조회(디바운스)한다.
+  // (목록 API가 최대 100건까지만 내려주므로 검색으로 좁혀야 100건 밖의 사용자도 찾을 수 있다)
+  const openAssignUsers = (courseId: string) => {
     setAssignUserCourseId(courseId);
-    setLoadingUsers(true);
-    try {
-      const res = await usersApi.getAll({ limit: 200 }); // 배정 모달은 전체 목록 필요
-      setAllUsers(res.data);
-    } finally {
-      setLoadingUsers(false);
-    }
+    setAssignUserSearch('');
   };
+
+  const loadAssignUsers = (search = assignUserSearch) => {
+    setLoadingUsers(true);
+    return usersApi.getAll({ limit: 100, search: search || undefined })
+      .then((res) => setAllUsers(res.data))
+      .finally(() => setLoadingUsers(false));
+  };
+
+  useEffect(() => {
+    if (!assignUserCourseId) return;
+    const t = setTimeout(() => { loadAssignUsers(assignUserSearch); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignUserCourseId, assignUserSearch]);
 
   const handleToggleUser = async (courseId: string, userId: string, currentCourseId: string | null) => {
     try {
@@ -197,8 +208,7 @@ export default function AdminCoursesPage() {
       } else {
         await coursesApi.assignUser(courseId, userId);
       }
-      const usersRes = await usersApi.getAll({ limit: 200 });
-      setAllUsers(usersRes.data);
+      await loadAssignUsers();
       await refreshDetail(courseId);
       loadCourses();
     } catch (err) {
@@ -526,10 +536,21 @@ export default function AdminCoursesPage() {
             <p className="mb-4 text-xs text-[var(--text-muted)]">
               클릭하면 이 과정으로 배정됩니다. 이미 배정된 계정은 다시 클릭하면 해제됩니다.
             </p>
+            <Input
+              placeholder="이름 또는 이메일 검색..."
+              value={assignUserSearch}
+              onChange={(e) => setAssignUserSearch(e.target.value)}
+              className="mb-3"
+              autoFocus
+            />
             {loadingUsers ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
               </div>
+            ) : allUsers.filter((u) => u.role === 'USER').length === 0 ? (
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                {assignUserSearch ? `"${assignUserSearch}" 검색 결과가 없습니다.` : '등록된 계정이 없습니다.'}
+              </p>
             ) : (
               <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1">
                 {allUsers.filter((u) => u.role === 'USER').map((u) => {

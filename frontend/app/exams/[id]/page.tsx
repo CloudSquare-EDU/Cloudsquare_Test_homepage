@@ -169,7 +169,13 @@ export default function ExamPage() {
           <p className="mt-1 text-xs text-[var(--text-faint)]">
             {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')} 응시
           </p>
-          <p className="mt-4 text-3xl font-black text-[var(--success-text)]">{existingSubmission.score}<span className="text-base font-normal text-[var(--text-muted)]">점</span></p>
+          {existingSubmission.resultHidden ? (
+            <p className="mt-4 text-sm text-[var(--text-muted)]">
+              이 시험은 실제 시험으로, 결과는 운영진만 확인할 수 있습니다.
+            </p>
+          ) : (
+            <p className="mt-4 text-3xl font-black text-[var(--success-text)]">{existingSubmission.score}<span className="text-base font-normal text-[var(--text-muted)]">점</span></p>
+          )}
           <div className="mt-5 flex flex-col gap-2">
             <Link href={`/submissions/${existingSubmission.id}`}>
               <Button className="w-full">결과 상세 보기</Button>
@@ -198,6 +204,11 @@ export default function ExamPage() {
             <h1 className="text-xl font-semibold text-[var(--text-primary)]">{exam.title}</h1>
             {exam.description && (
               <p className="mt-2 text-sm text-[var(--text-secondary)]">{exam.description}</p>
+            )}
+            {exam.examType === 'REAL_EXAM' && (
+              <div className="mt-3 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+                ⚠ 이 시험은 실제 시험입니다. 제출 후 점수와 정오표는 공개되지 않으며 운영진만 확인합니다.
+              </div>
             )}
           </div>
 

@@ -26,6 +26,7 @@ export interface ExamSummary {
   duration: number;
   questionCount: number | null;
   isPublished?: boolean;
+  examType: 'SELF_STUDY' | 'REAL_EXAM';
   startDate?: string | null;
   deadline?: string | null;
   createdAt: string;
@@ -52,6 +53,7 @@ export interface ExamDetail {
   description: string | null;
   duration: number;
   isPublished: boolean;
+  examType: 'SELF_STUDY' | 'REAL_EXAM';
   questionBankId: string | null;
   questionCount: number | null;
   questionBank: { id: string; name: string } | null;
@@ -74,15 +76,17 @@ export interface GradedAnswer {
 
 export interface SubmissionResult {
   submissionId: string;
-  score: number;
+  resultHidden: boolean; // 실제시험(REAL_EXAM)이면 true — 점수/정오표가 응답에 포함되지 않음
+  score: number | null;
   totalQuestions: number;
-  correctCount: number;
+  correctCount: number | null;
   answers: GradedAnswer[];
 }
 
 export interface SubmissionSummary {
   id: string;
   score: number | null;
+  resultHidden: boolean; // 실제시험(REAL_EXAM) 응시 기록이면 true — score는 항상 null
   totalQuestions: number;
   submittedAt: string;
   exam: {
@@ -109,6 +113,7 @@ export interface SubmissionDetail {
   id: string;
   exam: { id: string; title: string; duration: number };
   score: number | null;
+  resultHidden: boolean; // 실제시험(REAL_EXAM)이고 본인(비관리자)이 조회한 경우 true — score/questionResults 비공개
   totalQuestions: number;
   submittedAt: string;
   questionResults: QuestionResult[];

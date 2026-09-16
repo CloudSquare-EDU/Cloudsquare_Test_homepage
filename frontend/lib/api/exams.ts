@@ -25,6 +25,7 @@ export const examsApi = {
     title: string;
     description?: string;
     duration: number;
+    examType?: 'SELF_STUDY' | 'REAL_EXAM';
     questionBankId?: string;
     questionCount?: number;
     startDate?: string | null;
@@ -35,6 +36,7 @@ export const examsApi = {
     title?: string;
     description?: string;
     duration?: number;
+    examType?: 'SELF_STUDY' | 'REAL_EXAM';
     questionBankId?: string;
     questionCount?: number;
     startDate?: string | null;

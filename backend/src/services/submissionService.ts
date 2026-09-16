@@ -57,6 +57,10 @@ export const submitExam = async (input: SubmitInput) => {
     throw new AppError(403, ErrorCode.FORBIDDEN, '이 시험에 대한 응시 권한이 없습니다.');
   }
 
+  // 실제시험(REAL_EXAM)은 채점은 정상적으로 수행하되, 응답에서 점수/정오표를 숨긴다.
+  // (운영진만 결과를 확인할 수 있어야 하므로 — 제출 직후 응답에도 노출되면 안 됨)
+  const isRealExam = exam.examType === 'REAL_EXAM';
+
   // 3. 중복 응시 차단
   const existingSubmission = await prisma.submission.findFirst({ where: { userId, examId } });
   if (existingSubmission) {
@@ -134,8 +138,14 @@ export const submitExam = async (input: SubmitInput) => {
       });
     });
 
+    if (isRealExam) {
+      // 실제시험: 제출은 정상 처리되지만 점수/정오표는 운영진만 확인 가능 (응답에 노출하지 않음)
+      return { submissionId: submission.id, resultHidden: true, score: null, totalQuestions, correctCount: null, answers: [] };
+    }
+
     return {
       submissionId: submission.id,
+      resultHidden: false,
       score,
       totalQuestions,
       correctCount,
@@ -209,8 +219,14 @@ export const submitExam = async (input: SubmitInput) => {
     answersByQuestion.set(a.questionId, ids);
   }
 
+  if (isRealExam) {
+    // 실제시험: 제출은 정상 처리되지만 점수/정오표는 운영진만 확인 가능 (응답에 노출하지 않음)
+    return { submissionId: submission.id, resultHidden: true, score: null, totalQuestions, correctCount: null, answers: [] };
+  }
+
   return {
     submissionId: submission.id,
+    resultHidden: false,
     score,
     totalQuestions,
     correctCount,
@@ -227,26 +243,37 @@ export const submitExam = async (input: SubmitInput) => {
 // 설계 이유: 시험 응시 페이지 진입 시 기존에는 전체 submission 목록을 내려받아 클라이언트에서 filter했으나,
 //   이 엔드포인트로 단건 DB 조회만 수행 → 응시 이력이 많아도 일정한 속도 유지
 export const checkMySubmissionForExam = async (userId: string, examId: string) => {
-  return prisma.submission.findFirst({
+  const submission = await prisma.submission.findFirst({
     where: { userId, examId },
     select: {
       id: true,
       score: true,
       totalQuestions: true,
       submittedAt: true,
-      exam: { select: { id: true, title: true } },
+      exam: { select: { id: true, title: true, examType: true } },
     },
   });
+  if (!submission) return null;
+
+  // 실제시험(REAL_EXAM)은 본인에게도 점수를 노출하지 않는다 (운영진만 확인 가능)
+  const resultHidden = submission.exam.examType === 'REAL_EXAM';
+  return { ...submission, score: resultHidden ? null : submission.score, resultHidden };
 };
 
 // 내 응시 목록 조회
 export const getMySubmissions = async (userId: string) => {
-  return prisma.submission.findMany({
+  const submissions = await prisma.submission.findMany({
     where: { userId },
     orderBy: { submittedAt: 'desc' },
     include: {
-      exam: { select: { id: true, title: true } },
+      exam: { select: { id: true, title: true, examType: true } },
     },
+  });
+
+  // 실제시험(REAL_EXAM)은 본인 응시 기록 목록에서도 점수를 숨긴다 (운영진만 확인 가능)
+  return submissions.map((s) => {
+    const resultHidden = s.exam.examType === 'REAL_EXAM';
+    return { ...s, score: resultHidden ? null : s.score, resultHidden };
   });
 };
 
@@ -257,7 +284,7 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
   const submission = await prisma.submission.findUnique({
     where: { id },
     include: {
-      exam: { select: { id: true, title: true, duration: true } },
+      exam: { select: { id: true, title: true, duration: true, examType: true } },
       answers: {
         include: {
           question: { include: { choices: { orderBy: { order: 'asc' } } } },
@@ -273,6 +300,19 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
 
   if (!isAdmin && submission.userId !== userId) {
     throw new AppError(403, ErrorCode.FORBIDDEN, '접근 권한이 없습니다.');
+  }
+
+  // 실제시험(REAL_EXAM)은 운영진만 상세 결과(점수·정오표)를 볼 수 있다 — 본인에게도 비공개
+  if (!isAdmin && submission.exam.examType === 'REAL_EXAM') {
+    return {
+      id: submission.id,
+      exam: submission.exam,
+      score: null,
+      totalQuestions: submission.totalQuestions,
+      submittedAt: submission.submittedAt,
+      questionResults: [],
+      resultHidden: true,
+    };
   }
 
   type ChoiceResult = { id: string; content: string; isCorrect: boolean; isSelected: boolean };
@@ -383,6 +423,7 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
     totalQuestions: submission.totalQuestions,
     submittedAt: submission.submittedAt,
     questionResults,
+    resultHidden: false,
   };
 };
 

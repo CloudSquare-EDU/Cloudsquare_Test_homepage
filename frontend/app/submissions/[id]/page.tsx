@@ -38,7 +38,45 @@ export default function SubmissionDetailPage() {
     );
   }
 
-  const { questionResults, score, totalQuestions, submittedAt, exam } = submission;
+  const { questionResults, score, totalQuestions, submittedAt, exam, resultHidden } = submission;
+
+  // 실제시험(REAL_EXAM): 운영진만 결과를 확인할 수 있으므로 점수/정오표 대신 안내만 표시
+  if (resultHidden) {
+    return (
+      <div>
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-[var(--text-muted)] mb-1">
+              {new Date(submittedAt).toLocaleString('ko-KR')} 제출
+            </p>
+            <h1 className="text-xl font-semibold text-[var(--text-primary)] break-words">{exam.title}</h1>
+          </div>
+          <Link href="/submissions" className="shrink-0">
+            <Button variant="ghost" size="sm">← 기록 목록</Button>
+          </Link>
+        </div>
+
+        <div className="flex flex-col items-center rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-6 py-10 text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-raised)] text-2xl">🔒</div>
+          <p className="text-base font-semibold text-[var(--text-primary)]">제출이 완료되었습니다</p>
+          <p className="mt-1.5 max-w-sm text-sm text-[var(--text-muted)]">
+            이 시험은 실제 시험으로, 점수와 정오표는 운영진만 확인할 수 있습니다.
+          </p>
+          <p className="mt-3 text-xs text-[var(--text-faint)]">총 {totalQuestions}문제 제출됨</p>
+        </div>
+
+        <div className="mt-8 flex justify-center gap-3">
+          <Link href="/">
+            <Button variant="secondary">시험 목록</Button>
+          </Link>
+          <Link href="/submissions">
+            <Button variant="ghost">내 기록 보기</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const correctCount = questionResults.filter((q) => q.isCorrect).length;
   const unansweredCount = questionResults.filter((q) => q.isAnswered === false).length;
   const wrongCount = totalQuestions - correctCount - unansweredCount;

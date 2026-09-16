@@ -10,6 +10,7 @@ interface CreateExamInput {
   title: string;
   description?: string;
   duration: number;
+  examType?: 'SELF_STUDY' | 'REAL_EXAM';
   questionBankId?: string;
   questionCount?: number;
   startDate?: Date | null;
@@ -20,6 +21,7 @@ interface UpdateExamInput {
   title?: string;
   description?: string;
   duration?: number;
+  examType?: 'SELF_STUDY' | 'REAL_EXAM';
   questionBankId?: string | null;
   questionCount?: number | null;
   startDate?: Date | null;
@@ -75,6 +77,7 @@ export const getAssignedExamsForUser = async (userId: string) => {
   const toDto = (exam: {
     id: string; title: string; description: string | null; duration: number;
     createdAt: Date; startDate: Date | null; deadline: Date | null;
+    examType: string;
     _count: { questions: number };
     course: { id: string; name: string } | null;
     questionCount?: number | null;
@@ -87,6 +90,7 @@ export const getAssignedExamsForUser = async (userId: string) => {
     startDate: exam.startDate,
     deadline: exam.deadline,
     createdAt: exam.createdAt,
+    examType: exam.examType,
     course: exam.course,
   });
 
@@ -109,10 +113,21 @@ export const getAssignedExamsWithSubmissions = async (userId: string) => {
   ]);
 
   const subMap = new Map(submissions.map((s) => [s.examId, s]));
-  return exams.map((exam) => ({
-    ...exam,
-    submission: subMap.get(exam.id) ?? null,
-  }));
+  return exams.map((exam) => {
+    const sub = subMap.get(exam.id);
+    if (!sub) return { ...exam, submission: null };
+    // 실제시험(REAL_EXAM)은 수강생 홈 화면에서도 점수를 노출하지 않는다 (운영진만 확인)
+    const resultHidden = exam.examType === 'REAL_EXAM';
+    return {
+      ...exam,
+      submission: {
+        id: sub.id,
+        score: resultHidden ? null : sub.score,
+        totalQuestions: sub.totalQuestions,
+        submittedAt: sub.submittedAt,
+      },
+    };
+  });
 };
 
 // 전체 시험 목록 (ADMIN용) — 과정 + 문제은행 정보 포함
@@ -208,6 +223,7 @@ export const getExamById = async (id: string, userId?: string) => {
       description: exam.description,
       duration: exam.duration,
       isPublished: exam.isPublished,
+      examType: exam.examType,
       courseId: exam.courseId,
       questionBankId: exam.questionBankId,
       questionCount: exam.questionCount,
@@ -240,6 +256,7 @@ export const createExam = async (input: CreateExamInput) => {
       title: input.title,
       description: input.description,
       duration: input.duration,
+      examType: input.examType ?? 'SELF_STUDY',
       questionBankId: input.questionBankId ?? null,
       questionCount: input.questionCount ?? null,
       startDate: input.startDate ?? null,

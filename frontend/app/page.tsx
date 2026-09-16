@@ -147,19 +147,30 @@ export default function HomePage() {
                 {/* 점수 배지 or 응시하기 */}
                 <div className="flex items-center gap-2 shrink-0">
                   {done ? (
-                    <>
-                      <span className={`
-                        rounded-md px-2.5 py-1 text-sm font-bold
-                        ${(submission.score ?? 0) >= 80 ? 'bg-[var(--success-bg)] text-[var(--success-text)]' :
-                          (submission.score ?? 0) >= 60 ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]' :
-                          'bg-[var(--danger-bg)] text-[var(--danger-text)]'}
-                      `}>
-                        {submission.score}점
-                      </span>
-                      <Link href={`/submissions/${submission.id}`}>
-                        <Button variant="ghost" size="sm">결과 보기</Button>
-                      </Link>
-                    </>
+                    exam.examType === 'REAL_EXAM' ? (
+                      <>
+                        <span className="rounded-md px-2.5 py-1 text-xs font-medium bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                          🔒 제출 완료 · 비공개
+                        </span>
+                        <Link href={`/submissions/${submission.id}`}>
+                          <Button variant="ghost" size="sm">확인</Button>
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <span className={`
+                          rounded-md px-2.5 py-1 text-sm font-bold
+                          ${(submission.score ?? 0) >= 80 ? 'bg-[var(--success-bg)] text-[var(--success-text)]' :
+                            (submission.score ?? 0) >= 60 ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]' :
+                            'bg-[var(--danger-bg)] text-[var(--danger-text)]'}
+                        `}>
+                          {submission.score}점
+                        </span>
+                        <Link href={`/submissions/${submission.id}`}>
+                          <Button variant="ghost" size="sm">결과 보기</Button>
+                        </Link>
+                      </>
+                    )
                   ) : isExpired ? (
                     <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)]">기간 만료</span>
                   ) : isNotStarted ? (
