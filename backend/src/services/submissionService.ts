@@ -37,8 +37,16 @@ export const submitExam = async (input: SubmitInput) => {
   // 2. 응시 권한 확인: UserExam 직접 할당 OR 과정(course) 기반 접근
   const [directAssignment, user] = await Promise.all([
     prisma.userExam.findUnique({ where: { userId_examId: { userId, examId } } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { courseId: true } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { courseId: true, course: { select: { isArchived: true } } },
+    }),
   ]);
+
+  // 소속 과정이 보관 처리된 경우 응시 차단
+  if (user?.course?.isArchived) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, '소속 과정이 보관 처리되어 시험에 응시할 수 없습니다.');
+  }
 
   const hasDirectAccess = !!directAssignment;
   const hasCourseAccess = !!(user?.courseId && exam.courseId && user.courseId === exam.courseId);

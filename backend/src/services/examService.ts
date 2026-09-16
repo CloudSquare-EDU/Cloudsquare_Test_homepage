@@ -33,8 +33,13 @@ interface UpdateExamInput {
 export const getAssignedExamsForUser = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { courseId: true },
+    select: { courseId: true, course: { select: { isArchived: true } } },
   });
+
+  // 소속 과정이 보관 처리된 경우 시험 목록을 아예 내려주지 않음 (응시/조회 모두 차단)
+  if (user?.course?.isArchived) {
+    return [];
+  }
 
   // UserExam 직접 매핑
   const directMappings = await prisma.userExam.findMany({
@@ -120,9 +125,12 @@ export const getAllExams = async (params: {
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
   const skip = (page - 1) * limit;
 
-  const where = params.search
+  // 보관된 과정에 속한 시험은 관리자 목록에서 기본적으로 숨긴다.
+  const archivedFilter = { OR: [{ courseId: null }, { course: { isArchived: false } }] };
+  const searchFilter = params.search
     ? { title: { contains: params.search, mode: 'insensitive' as const } }
-    : {};
+    : null;
+  const where = searchFilter ? { AND: [archivedFilter, searchFilter] } : archivedFilter;
 
   const [total, exams] = await Promise.all([
     prisma.exam.count({ where }),
@@ -169,6 +177,17 @@ export const getExamById = async (id: string, userId?: string) => {
 
   if (!exam) {
     throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
+  }
+
+  // 소속 과정이 보관 처리된 경우 시험 조회 자체를 차단 (userId가 있을 때만 — 관리자는 제외)
+  if (userId) {
+    const requester = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { course: { select: { isArchived: true } } },
+    });
+    if (requester?.course?.isArchived) {
+      throw new AppError(403, ErrorCode.FORBIDDEN, '소속 과정이 보관 처리되어 시험에 접근할 수 없습니다.');
+    }
   }
 
   // 시작일/마감일 체크 (userId가 있을 때만 — 관리자는 제외)

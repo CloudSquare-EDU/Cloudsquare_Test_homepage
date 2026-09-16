@@ -20,7 +20,9 @@ export const listCourses = async (req: Request, res: Response, next: NextFunctio
     const page = parseInt(req.query['page'] as string) || 1;
     const limit = parseInt(req.query['limit'] as string) || 20;
     const search = (req.query['search'] as string) || undefined;
-    const result = await courseService.getAllCourses({ page, limit, search });
+    const archivedParam = req.query['archived'] as string | undefined;
+    const archived = archivedParam === undefined ? undefined : archivedParam === 'true';
+    const result = await courseService.getAllCourses({ page, limit, search, archived });
     res.json({ success: true, data: result });
   } catch (e) { next(e); }
 };
@@ -56,6 +58,22 @@ export const deleteCourse = async (req: Request, res: Response, next: NextFuncti
   try {
     await courseService.deleteCourse(req.params.id);
     res.json({ success: true, data: { message: '과정이 삭제되었습니다.' } });
+  } catch (e) { next(e); }
+};
+
+// PATCH /courses/:id/archive — 과정 보관 (데이터는 유지, 목록/로그인/응시에서 숨김)
+export const archiveCourse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await courseService.archiveCourse(req.params.id);
+    res.json({ success: true, data: course });
+  } catch (e) { next(e); }
+};
+
+// PATCH /courses/:id/unarchive — 과정 보관 해제
+export const unarchiveCourse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await courseService.unarchiveCourse(req.params.id);
+    res.json({ success: true, data: course });
   } catch (e) { next(e); }
 };
 

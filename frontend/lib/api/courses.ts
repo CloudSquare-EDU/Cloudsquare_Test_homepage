@@ -11,11 +11,12 @@ export interface PaginatedCoursesResponse {
 }
 
 export const coursesApi = {
-  getAll: (params?: { page?: number; limit?: number; search?: string }) => {
+  getAll: (params?: { page?: number; limit?: number; search?: string; archived?: boolean }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.search) qs.set('search', params.search);
+    if (params?.archived !== undefined) qs.set('archived', String(params.archived));
     const query = qs.toString();
     return apiClient.get<PaginatedCoursesResponse>(`/courses${query ? `?${query}` : ''}`);
   },
@@ -30,6 +31,13 @@ export const coursesApi = {
 
   delete: (id: string) =>
     apiClient.delete<{ message: string }>(`/courses/${id}`),
+
+  // 보관 / 보관 해제
+  archive: (id: string) =>
+    apiClient.patch<CourseSummary>(`/courses/${id}/archive`, {}),
+
+  unarchive: (id: string) =>
+    apiClient.patch<CourseSummary>(`/courses/${id}/unarchive`, {}),
 
   // 사용자 배정
   assignUser: (courseId: string, userId: string) =>

@@ -6,18 +6,21 @@ import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode } from '../types';
 
 // ── 전체 과정 목록 (페이지네이션 + 검색 지원) ──────────────────
+// archived: false(기본) → 활성 과정만 / true → 보관된 과정만
 export const getAllCourses = async (params: {
   page?: number;
   limit?: number;
   search?: string;
+  archived?: boolean;
 } = {}) => {
   const page = Math.max(1, params.page ?? 1);
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
   const skip = (page - 1) * limit;
 
-  const where = params.search
-    ? { name: { contains: params.search, mode: 'insensitive' as const } }
-    : {};
+  const where = {
+    isArchived: params.archived ?? false,
+    ...(params.search ? { name: { contains: params.search, mode: 'insensitive' as const } } : {}),
+  };
 
   const [total, courses] = await Promise.all([
     prisma.course.count({ where }),
@@ -87,6 +90,33 @@ export const deleteCourse = async (id: string) => {
   await prisma.course.delete({ where: { id } });
 };
 
+// ── 과정 보관 ──────────────────────────────────────────────────
+// 데이터는 삭제하지 않고 isArchived만 true로 전환.
+// 관리자 목록(과정/사용자/시험 목록, 대시보드)에서 제외되고,
+// 소속 사용자는 로그인 및 시험 응시가 차단된다 (authService.login, submissionService.submitExam 등에서 검사).
+export const archiveCourse = async (id: string) => {
+  const course = await prisma.course.findUnique({ where: { id } });
+  if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  if (course.isArchived) throw new AppError(400, ErrorCode.BAD_REQUEST, '이미 보관된 과정입니다.');
+
+  return prisma.course.update({
+    where: { id },
+    data: { isArchived: true, archivedAt: new Date() },
+  });
+};
+
+// ── 과정 보관 해제 ─────────────────────────────────────────────
+export const unarchiveCourse = async (id: string) => {
+  const course = await prisma.course.findUnique({ where: { id } });
+  if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  if (!course.isArchived) throw new AppError(400, ErrorCode.BAD_REQUEST, '보관된 과정이 아닙니다.');
+
+  return prisma.course.update({
+    where: { id },
+    data: { isArchived: false, archivedAt: null },
+  });
+};
+
 // ── 사용자 → 과정 매핑 ──────────────────────────────────────
 export const assignUserToCourse = async (userId: string, courseId: string) => {
   const [user, course] = await Promise.all([
@@ -95,6 +125,7 @@ export const assignUserToCourse = async (userId: string, courseId: string) => {
   ]);
   if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
   if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  if (course.isArchived) throw new AppError(400, ErrorCode.BAD_REQUEST, '보관된 과정에는 배정할 수 없습니다. 먼저 보관을 해제해주세요.');
 
   return prisma.user.update({ where: { id: userId }, data: { courseId } });
 };
@@ -108,6 +139,7 @@ export const removeUserFromCourse = async (userId: string) => {
 export const bulkAssignUsersToCourse = async (userIds: string[], courseId: string) => {
   const course = await prisma.course.findUnique({ where: { id: courseId } });
   if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  if (course.isArchived) throw new AppError(400, ErrorCode.BAD_REQUEST, '보관된 과정에는 배정할 수 없습니다. 먼저 보관을 해제해주세요.');
 
   const result = await prisma.user.updateMany({
     where: { id: { in: userIds } },
@@ -124,6 +156,7 @@ export const assignExamToCourse = async (examId: string, courseId: string) => {
   ]);
   if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
   if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  if (course.isArchived) throw new AppError(400, ErrorCode.BAD_REQUEST, '보관된 과정에는 배정할 수 없습니다. 먼저 보관을 해제해주세요.');
 
   return prisma.exam.update({ where: { id: examId }, data: { courseId } });
 };

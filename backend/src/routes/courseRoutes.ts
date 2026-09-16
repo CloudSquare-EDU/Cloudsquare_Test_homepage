@@ -13,6 +13,8 @@ courseRoutes.get('/:id',                        ctrl.getCourse);
 courseRoutes.post('/',                          ctrl.createCourse);
 courseRoutes.patch('/:id',                      ctrl.updateCourse);
 courseRoutes.delete('/:id',                     ctrl.deleteCourse);
+courseRoutes.patch('/:id/archive',              ctrl.archiveCourse);
+courseRoutes.patch('/:id/unarchive',            ctrl.unarchiveCourse);
 
 // 사용자 배정
 courseRoutes.post('/:id/users/bulk',            ctrl.bulkAssignUsers);

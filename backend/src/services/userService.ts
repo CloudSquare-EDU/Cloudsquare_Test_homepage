@@ -27,14 +27,18 @@ export const getAllUsers = async (params: {
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
   const skip = (page - 1) * limit;
 
-  const where = params.search
+  // 보관된 과정에 속한 사용자는 관리자 목록에서 기본적으로 숨긴다.
+  // (과정 자체는 삭제되지 않으므로 사용자 데이터도 그대로 남아있지만, 화면에는 노출하지 않음)
+  const archivedFilter = { OR: [{ courseId: null }, { course: { isArchived: false } }] };
+  const searchFilter = params.search
     ? {
         OR: [
           { name: { contains: params.search, mode: 'insensitive' as const } },
           { email: { contains: params.search, mode: 'insensitive' as const } },
         ],
       }
-    : {};
+    : null;
+  const where = searchFilter ? { AND: [archivedFilter, searchFilter] } : archivedFilter;
 
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
@@ -120,7 +124,7 @@ export const bulkCreateUsers = async (
   const courseIdCache = new Map<string, string | null>();
   const resolveCourseId = async (courseName: string): Promise<string | null> => {
     if (courseIdCache.has(courseName)) return courseIdCache.get(courseName) ?? null;
-    const course = await prisma.course.findFirst({ where: { name: courseName } });
+    const course = await prisma.course.findFirst({ where: { name: courseName, isArchived: false } });
     const courseId = course?.id ?? null;
     courseIdCache.set(courseName, courseId);
     return courseId;

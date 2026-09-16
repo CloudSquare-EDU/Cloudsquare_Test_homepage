@@ -35,7 +35,10 @@ const getJwtSecret = (): string => {
 export const login = async (input: LoginInput): Promise<AuthResult> => {
   const { email, password } = input;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { course: { select: { isArchived: true } } },
+  });
   if (!user) {
     // 보안상 이메일/비밀번호 구분 없이 동일 메시지
     throw new AppError(401, ErrorCode.UNAUTHORIZED, '이메일 또는 비밀번호가 올바르지 않습니다.');
@@ -44,6 +47,11 @@ export const login = async (input: LoginInput): Promise<AuthResult> => {
   const isValid = await bcrypt.compare(password, user.password);
   if (!isValid) {
     throw new AppError(401, ErrorCode.UNAUTHORIZED, '이메일 또는 비밀번호가 올바르지 않습니다.');
+  }
+
+  // 소속 과정이 보관 처리된 경우 로그인 차단 (관리자 계정은 과정에 속하지 않으므로 영향 없음)
+  if (user.course?.isArchived) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, '소속 과정이 보관 처리되어 로그인할 수 없습니다. 관리자에게 문의해주세요.');
   }
 
   const payload: JwtPayload = { userId: user.id, email: user.email, role: user.role };

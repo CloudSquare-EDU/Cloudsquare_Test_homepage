@@ -157,6 +157,8 @@ export interface CourseSummary {
   name: string;
   description: string | null;
   createdAt: string;
+  isArchived: boolean;
+  archivedAt: string | null;
   _count: { users: number; exams: number };
 }
 
@@ -165,6 +167,8 @@ export interface CourseDetail {
   name: string;
   description: string | null;
   createdAt: string;
+  isArchived: boolean;
+  archivedAt: string | null;
   users: Array<{ id: string; name: string; email: string; role: Role }>;
   exams: Array<{ id: string; title: string; duration: number; isPublished: boolean }>;
 }

@@ -20,11 +20,13 @@ enum Role {
 // Course — 과정 (e.g. "OO대학교 네이버클라우드 아카데미")
 // ─────────────────────────────────────────
 model Course {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isArchived  Boolean   @default(false) // 보관 여부 — 보관 시 관리자 목록/대시보드에서 숨기고 소속 사용자 로그인·응시 차단 (데이터는 삭제하지 않음)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   users User[]
   exams Exam[]

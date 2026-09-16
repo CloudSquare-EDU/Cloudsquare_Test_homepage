@@ -25,6 +25,7 @@ export default function AdminCoursesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
 
   // 생성 폼
   const [showCreate, setShowCreate] = useState(false);
@@ -41,6 +42,11 @@ export default function AdminCoursesPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 보관 / 보관 해제
+  const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [unarchivingId, setUnarchivingId] = useState<string | null>(null);
+
   // 사용자 배정 모달
   const [assignUserCourseId, setAssignUserCourseId] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<UserSummary[]>([]);
@@ -51,9 +57,9 @@ export default function AdminCoursesPage() {
   const [allExams, setAllExams] = useState<AdminExam[]>([]);
   const [loadingExams, setLoadingExams] = useState(false);
 
-  const loadCourses = (p = page, s = search) => {
+  const loadCourses = (p = page, s = search, v = viewMode) => {
     setIsLoading(true);
-    coursesApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined })
+    coursesApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined, archived: v === 'archived' })
       .then((res) => {
         setCourses(res.data);
         setTotal(res.total);
@@ -63,7 +69,13 @@ export default function AdminCoursesPage() {
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadCourses(page, search); }, [page, search]);
+  useEffect(() => { loadCourses(page, search, viewMode); }, [page, search, viewMode]);
+
+  const handleViewModeChange = (v: 'active' | 'archived') => {
+    setViewMode(v);
+    setPage(1);
+    setExpandedId(null);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +149,35 @@ export default function AdminCoursesPage() {
     }
   };
 
+  // ── 과정 보관 ────────────────────────────────────────────────
+  const handleArchive = async () => {
+    if (!archiveTargetId) return;
+    setIsArchiving(true);
+    try {
+      await coursesApi.archive(archiveTargetId);
+      setArchiveTargetId(null);
+      loadCourses();
+      showSuccess('과정이 보관되었습니다. 소속 계정/시험은 대시보드·목록에서 숨겨지고, 소속 계정은 로그인 및 응시가 불가능합니다.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '보관 중 오류가 발생했습니다.');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleUnarchive = async (courseId: string) => {
+    setUnarchivingId(courseId);
+    try {
+      await coursesApi.unarchive(courseId);
+      loadCourses();
+      showSuccess('과정 보관이 해제되었습니다.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '보관 해제 중 오류가 발생했습니다.');
+    } finally {
+      setUnarchivingId(null);
+    }
+  };
+
   // ── 사용자 배정 모달 ─────────────────────────────────────────
   const openAssignUsers = async (courseId: string) => {
     setAssignUserCourseId(courseId);
@@ -194,6 +235,7 @@ export default function AdminCoursesPage() {
   };
 
   const deletingCourse = courses.find((c) => c.id === deleteTargetId);
+  const archivingCourse = courses.find((c) => c.id === archiveTargetId);
 
   return (
     <div>
@@ -247,6 +289,26 @@ export default function AdminCoursesPage() {
         </form>
       )}
 
+      {/* 보관 탭 */}
+      <div className="mb-4 flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] p-1 w-fit">
+        <button
+          onClick={() => handleViewModeChange('active')}
+          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            viewMode === 'active' ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          진행 중인 과정
+        </button>
+        <button
+          onClick={() => handleViewModeChange('archived')}
+          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            viewMode === 'archived' ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          보관된 과정
+        </button>
+      </div>
+
       {/* 검색 */}
       <form onSubmit={handleSearch} className="mb-4 flex gap-2">
         <Input
@@ -268,8 +330,14 @@ export default function AdminCoursesPage() {
         </div>
       ) : courses.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-          <p className="text-sm text-[var(--text-muted)]">{search ? `"${search}" 검색 결과가 없습니다` : '생성된 과정이 없습니다'}</p>
-          <p className="mt-1 text-xs text-[var(--text-faint)]">과정을 먼저 생성하세요</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            {search
+              ? `"${search}" 검색 결과가 없습니다`
+              : viewMode === 'archived' ? '보관된 과정이 없습니다' : '생성된 과정이 없습니다'}
+          </p>
+          {viewMode === 'active' && !search && (
+            <p className="mt-1 text-xs text-[var(--text-faint)]">과정을 먼저 생성하세요</p>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -293,7 +361,14 @@ export default function AdminCoursesPage() {
                       </svg>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-[var(--text-primary)] truncate">{course.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-[var(--text-primary)] truncate">{course.name}</p>
+                        {course.isArchived && (
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
+                            보관됨
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[var(--text-muted)]">
                         <span>계정 {course._count.users}명</span>
                         <span className="text-[var(--border)]">·</span>
@@ -310,12 +385,29 @@ export default function AdminCoursesPage() {
 
                   {/* 액션 버튼: 모바일-하단분리 / 데스크탑-우측인라인 */}
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
-                    <Button variant="secondary" size="sm" onClick={() => openAssignUsers(course.id)}>
-                      계정 배정
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={() => openAssignExams(course.id)}>
-                      시험 배정
-                    </Button>
+                    {!course.isArchived && (
+                      <>
+                        <Button variant="secondary" size="sm" onClick={() => openAssignUsers(course.id)}>
+                          계정 배정
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => openAssignExams(course.id)}>
+                          시험 배정
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setArchiveTargetId(course.id)}>
+                          보관
+                        </Button>
+                      </>
+                    )}
+                    {course.isArchived && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        isLoading={unarchivingId === course.id}
+                        onClick={() => handleUnarchive(course.id)}
+                      >
+                        보관 해제
+                      </Button>
+                    )}
                     <Button variant="danger" size="sm" onClick={() => setDeleteTargetId(course.id)}>
                       삭제
                     </Button>
@@ -412,6 +504,17 @@ export default function AdminCoursesPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTargetId(null)}
         isLoading={isDeleting}
+      />
+
+      {/* 보관 확인 모달 */}
+      <Modal
+        isOpen={!!archiveTargetId}
+        title="과정을 보관하시겠습니까?"
+        message={`"${archivingCourse?.name}" 과정을 보관하면 대시보드·사용자 관리·시험 관리 화면에서 숨겨지고, 소속 계정은 로그인 및 시험 응시가 불가능해집니다. 데이터는 삭제되지 않으며 언제든 보관 해제할 수 있습니다.`}
+        confirmLabel="보관"
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveTargetId(null)}
+        isLoading={isArchiving}
       />
 
       {/* 계정 배정 모달 */}
