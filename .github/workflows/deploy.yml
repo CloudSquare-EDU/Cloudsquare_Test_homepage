@@ -1,0 +1,29 @@
+# main 브랜치에 push되면 NCP 서버에 SSH로 접속해서
+# git pull + docker compose 재빌드까지 자동으로 실행한다.
+#
+# 필요한 GitHub 저장소 Secret (Settings → Secrets and variables → Actions):
+#   SSH_HOST        예: 101.79.23.83
+#   SSH_USER        예: root
+#   SSH_PRIVATE_KEY 서버 접속용 pem 키 파일의 전체 내용 (-----BEGIN ... END----- 포함)
+
+name: Deploy to NCP
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH로 NCP 서버 접속 후 배포
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/Cloudsquare_Test_homepage
+            git pull
+            docker compose -f docker-compose.prod.yml up -d --build
