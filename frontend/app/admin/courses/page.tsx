@@ -57,6 +57,7 @@ export default function AdminCoursesPage() {
   const [assignExamCourseId, setAssignExamCourseId] = useState<string | null>(null);
   const [allExams, setAllExams] = useState<AdminExam[]>([]);
   const [loadingExams, setLoadingExams] = useState(false);
+  const [assignExamSearch, setAssignExamSearch] = useState('');
 
   const loadCourses = (p = page, s = search, v = viewMode) => {
     setIsLoading(true);
@@ -217,16 +218,25 @@ export default function AdminCoursesPage() {
   };
 
   // ── 시험 배정 모달 ───────────────────────────────────────────
-  const openAssignExams = async (courseId: string) => {
+  // 시험이 많아지면 스크롤로 찾기 어려우므로, 검색어 입력 시 서버에서 재조회(디바운스)한다.
+  const openAssignExams = (courseId: string) => {
     setAssignExamCourseId(courseId);
-    setLoadingExams(true);
-    try {
-      const res = await examsApi.getAllAdmin({ limit: 200 }); // 배정 모달은 전체 목록 필요
-      setAllExams(res.data);
-    } finally {
-      setLoadingExams(false);
-    }
+    setAssignExamSearch('');
   };
+
+  const loadAssignExams = (search = assignExamSearch) => {
+    setLoadingExams(true);
+    return examsApi.getAllAdmin({ limit: 100, search: search || undefined })
+      .then((res) => setAllExams(res.data))
+      .finally(() => setLoadingExams(false));
+  };
+
+  useEffect(() => {
+    if (!assignExamCourseId) return;
+    const t = setTimeout(() => { loadAssignExams(assignExamSearch); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignExamCourseId, assignExamSearch]);
 
   const handleToggleExam = async (courseId: string, examId: string, currentCourseId: string | null) => {
     try {
@@ -235,8 +245,7 @@ export default function AdminCoursesPage() {
       } else {
         await coursesApi.assignExam(courseId, examId);
       }
-      const examsRes = await examsApi.getAllAdmin({ limit: 200 });
-      setAllExams(examsRes.data);
+      await loadAssignExams();
       await refreshDetail(courseId);
       loadCourses();
     } catch (err) {
@@ -529,18 +538,23 @@ export default function AdminCoursesPage() {
 
       {/* 계정 배정 모달 */}
       {assignUserCourseId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAssignUserCourseId(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
-            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">계정 배정</h2>
-            <p className="mb-4 text-xs text-[var(--text-muted)]">
-              클릭하면 이 과정으로 배정됩니다. 이미 배정된 계정은 다시 클릭하면 해제됩니다.
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">계정 배정</h2>
+              <span className="shrink-0 rounded-full bg-[rgba(94,106,210,0.12)] px-2.5 py-1 text-xs font-medium text-[#5e6ad2]">
+                현재 {courses.find((c) => c.id === assignUserCourseId)?._count.users ?? 0}명 배정됨
+              </span>
+            </div>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              클릭하면 이 과정으로 배정됩니다. 이미 배정된 계정은 다시 클릭하면 해제됩니다. 배정된 계정은 목록 맨 위에 표시됩니다.
             </p>
             <Input
               placeholder="이름 또는 이메일 검색..."
               value={assignUserSearch}
               onChange={(e) => setAssignUserSearch(e.target.value)}
-              className="mb-3"
+              className="mb-3 shrink-0"
               autoFocus
             />
             {loadingUsers ? (
@@ -552,8 +566,15 @@ export default function AdminCoursesPage() {
                 {assignUserSearch ? `"${assignUserSearch}" 검색 결과가 없습니다.` : '등록된 계정이 없습니다.'}
               </p>
             ) : (
-              <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1">
-                {allUsers.filter((u) => u.role === 'USER').map((u) => {
+              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
+                {allUsers
+                  .filter((u) => u.role === 'USER')
+                  .sort((a, b) => {
+                    const aIn = a.courseId === assignUserCourseId ? 1 : 0;
+                    const bIn = b.courseId === assignUserCourseId ? 1 : 0;
+                    return bIn - aIn; // 이 과정에 배정된 계정을 맨 위로
+                  })
+                  .map((u) => {
                   const isInThisCourse = u.courseId === assignUserCourseId;
                   const isInOtherCourse = u.courseId && u.courseId !== assignUserCourseId;
                   return (
@@ -562,25 +583,28 @@ export default function AdminCoursesPage() {
                       onClick={() => handleToggleUser(assignUserCourseId, u.id, u.courseId)}
                       className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                         isInThisCourse
-                          ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)]'
+                          ? 'border-[rgba(94,106,210,0.5)] bg-[rgba(94,106,210,0.08)]'
                           : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
                       }`}
                     >
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-bold text-[#5e6ad2]">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-raised)] text-xs font-bold text-[#5e6ad2]">
                         {u.name.charAt(0)}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium truncate ${isInThisCourse ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`break-words text-xs font-medium ${isInThisCourse ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {u.name}
                         </p>
-                        <p className="text-[10px] text-[var(--text-faint)] truncate">{u.email}</p>
+                        <p className="break-words text-[10px] text-[var(--text-faint)]">{u.email}</p>
+                        {isInOtherCourse && (
+                          <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">다른 과정 배정됨: {u.course?.name}</p>
+                        )}
                       </div>
                       {isInThisCourse && (
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[#5e6ad2] text-white">배정됨</span>
-                      )}
-                      {isInOtherCourse && (
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[var(--text-muted)] truncate max-w-[80px]">
-                          {u.course?.name}
+                        <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#5e6ad2] text-white">
+                          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                          </svg>
+                          배정됨
                         </span>
                       )}
                     </button>
@@ -597,47 +621,72 @@ export default function AdminCoursesPage() {
 
       {/* 시험 배정 모달 */}
       {assignExamCourseId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAssignExamCourseId(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
-            <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">시험 배정</h2>
-            <p className="mb-4 text-xs text-[var(--text-muted)]">
-              클릭하면 이 과정으로 배정됩니다. 이미 배정된 시험은 다시 클릭하면 해제됩니다.
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">시험 배정</h2>
+              <span className="shrink-0 rounded-full bg-[rgba(94,106,210,0.12)] px-2.5 py-1 text-xs font-medium text-[#5e6ad2]">
+                현재 {courses.find((c) => c.id === assignExamCourseId)?._count.exams ?? 0}개 배정됨
+              </span>
+            </div>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              클릭하면 이 과정으로 배정됩니다. 이미 배정된 시험은 다시 클릭하면 해제됩니다. 배정된 시험은 목록 맨 위에 표시됩니다.
             </p>
+            <Input
+              placeholder="시험명 검색..."
+              value={assignExamSearch}
+              onChange={(e) => setAssignExamSearch(e.target.value)}
+              className="mb-3 shrink-0"
+              autoFocus
+            />
             {loadingExams ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
               </div>
+            ) : allExams.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                {assignExamSearch ? `"${assignExamSearch}" 검색 결과가 없습니다.` : '등록된 시험이 없습니다.'}
+              </p>
             ) : (
-              <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1">
-                {allExams.map((exam) => {
+              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
+                {[...allExams]
+                  .sort((a, b) => {
+                    const aIn = a.courseId === assignExamCourseId ? 1 : 0;
+                    const bIn = b.courseId === assignExamCourseId ? 1 : 0;
+                    return bIn - aIn; // 이 과정에 배정된 시험을 맨 위로
+                  })
+                  .map((exam) => {
                   const isInThisCourse = exam.courseId === assignExamCourseId;
                   const isInOtherCourse = exam.courseId && exam.courseId !== assignExamCourseId;
                   return (
                     <button
                       key={exam.id}
                       onClick={() => handleToggleExam(assignExamCourseId, exam.id, exam.courseId)}
-                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                         isInThisCourse
-                          ? 'border-[rgba(94,106,210,0.4)] bg-[var(--bg-raised)]'
+                          ? 'border-[rgba(94,106,210,0.5)] bg-[rgba(94,106,210,0.08)]'
                           : 'border-[var(--border)] bg-[var(--bg-inset)] hover:border-[var(--border-hover)]'
                       }`}
                     >
-                      <svg className="h-4 w-4 shrink-0 text-[#5e6ad2]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-[#5e6ad2]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
                         <path d="M10 2v3h3M5 8h6M5 11h4" strokeLinecap="round" />
                       </svg>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium truncate ${isInThisCourse ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`break-words text-xs font-medium ${isInThisCourse ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {exam.title}
                         </p>
+                        {isInOtherCourse && (
+                          <p className="mt-0.5 text-[10px] text-[var(--text-faint)]">다른 과정 배정됨: {exam.course?.name ?? '타 과정'}</p>
+                        )}
                       </div>
                       {isInThisCourse && (
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[#5e6ad2] text-white">배정됨</span>
-                      )}
-                      {isInOtherCourse && (
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-[var(--bg-raised)] text-[var(--text-muted)] truncate max-w-[80px]">
-                          {exam.course?.name ?? '타 과정'}
+                        <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#5e6ad2] text-white">
+                          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                          </svg>
+                          배정됨
                         </span>
                       )}
                     </button>
@@ -645,7 +694,7 @@ export default function AdminCoursesPage() {
                 })}
               </div>
             )}
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex shrink-0 justify-end">
               <Button size="sm" onClick={() => setAssignExamCourseId(null)}>완료</Button>
             </div>
           </div>
