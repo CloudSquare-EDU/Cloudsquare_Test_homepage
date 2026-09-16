@@ -8,12 +8,6 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode, JwtPayload } from '../types';
 
-interface RegisterInput {
-  email: string;
-  password: string;
-  name: string;
-}
-
 interface LoginInput {
   email: string;
   password: string;
@@ -36,30 +30,7 @@ const getJwtSecret = (): string => {
   return secret;
 };
 
-export const register = async (input: RegisterInput): Promise<AuthResult> => {
-  const { email, password, name } = input;
-
-  // 이메일 중복 확인
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    throw new AppError(409, ErrorCode.CONFLICT, '이미 사용 중인 이메일입니다.');
-  }
-
-  // 비밀번호 해시 (salt rounds: 12)
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  const user = await prisma.user.create({
-    data: { email, password: hashedPassword, name },
-    select: { id: true, email: true, name: true, role: true, mustChangePassword: true },
-  });
-
-  const payload: JwtPayload = { userId: user.id, email: user.email, role: user.role };
-  const accessToken = jwt.sign(payload, getJwtSecret(), {
-    expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as jwt.SignOptions['expiresIn'],
-  });
-
-  return { accessToken, user };
-};
+// 공개 회원가입은 제공하지 않는다 (계정은 관리자가 userService.createUser/bulkCreateUsers로만 생성).
 
 export const login = async (input: LoginInput): Promise<AuthResult> => {
   const { email, password } = input;
