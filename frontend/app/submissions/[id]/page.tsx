@@ -132,6 +132,21 @@ export default function SubmissionDetailPage() {
         </div>
       </div>
 
+      {/* 정답 검수 관련 안내 */}
+      <div className="mb-6 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-xs leading-relaxed text-[var(--warning-text)]">
+        ⚠ 이 시험 문제는 문제은행에서 무작위로 출제되며, 아직 정답에 대한 전수 검수가 완료되지 않았습니다. 일부 문제는 정답이 잘못 등록되었거나, 네이버클라우드 서비스 사양 변경으로 최신 정답과 달라졌을 수 있습니다.
+        실제 자격시험을 준비하실 때는 여기 표시된 정답을 그대로 믿지 마시고 <span className="font-medium">반드시 본인이 직접 정답을 검수</span>하시고, 헷갈리는 문제는{' '}
+        <a
+          href="https://api.ncloud-docs.com/docs/home"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium underline underline-offset-2 hover:opacity-80"
+        >
+          네이버클라우드 API 문서
+        </a>
+        를 참고해 확인해 주세요.
+      </div>
+
       {/* 정오표 */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">문제별 결과</h2>

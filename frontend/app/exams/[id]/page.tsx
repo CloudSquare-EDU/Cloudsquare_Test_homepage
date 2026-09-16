@@ -382,13 +382,12 @@ export default function ExamPage() {
           ) : (
             <p className="text-xs text-[var(--text-muted)]">
               {answeredCount < totalCount
-                ? `${totalCount - answeredCount}개 문제를 아직 풀지 않았습니다`
+                ? `${totalCount - answeredCount}개 문제를 안 풀었습니다 — 지금 제출하면 오답 처리됩니다`
                 : '모든 문제에 답했습니다 ✓ 제출 가능합니다'}
             </p>
           )}
           <Button
             onClick={() => setShowConfirmModal(true)}
-            disabled={answeredCount < totalCount}
             isLoading={isSubmitting}
             className="w-full sm:w-auto"
           >
@@ -400,7 +399,11 @@ export default function ExamPage() {
       <Modal
         isOpen={showConfirmModal}
         title="시험을 제출하시겠습니까?"
-        message="제출 후에는 수정이 불가합니다."
+        message={
+          answeredCount < totalCount
+            ? `안 푼 문제 ${totalCount - answeredCount}개는 오답 처리됩니다. 제출 후에는 수정이 불가합니다.`
+            : '제출 후에는 수정이 불가합니다.'
+        }
         confirmLabel="제출"
         onConfirm={handleSubmit}
         onCancel={() => setShowConfirmModal(false)}
