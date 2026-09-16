@@ -27,11 +27,14 @@ export interface BulkUserInput {
   email: string;
   password: string;
   role?: 'USER' | 'ADMIN';
+  courseName?: string;
 }
 
 export interface BulkUserResult {
   success: number;
   failed: { email: string; reason: string }[];
+  courseAssigned: number;
+  courseFailed: { email: string; reason: string }[];
 }
 
 export interface PaginatedResponse<T> {

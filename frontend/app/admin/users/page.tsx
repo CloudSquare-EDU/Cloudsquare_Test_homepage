@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, FormEvent } from 'react';
 import * as XLSX from 'xlsx';
-import { usersApi, UserSummary, BulkUserInput } from '@/lib/api/users';
+import { usersApi, UserSummary, BulkUserInput, BulkUserResult } from '@/lib/api/users';
 import { coursesApi } from '@/lib/api/courses';
 import { CourseSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -56,7 +56,7 @@ export default function AdminUsersPage() {
   const [excelPreview, setExcelPreview] = useState<ExcelUserRow[]>([]);
   const [excelError, setExcelError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ success: number; failed: { email: string; reason: string }[] } | null>(null);
+  const [uploadResult, setUploadResult] = useState<BulkUserResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -208,45 +208,18 @@ export default function AdminUsersPage() {
     setIsUploading(true);
     setError(null);
     try {
+      // 과정명은 서버로 그대로 넘기고, 계정 생성과 동시에 서버에서 과정을 매핑한다.
+      // (예전엔 여기서 사용자/과정 전체 목록을 다시 조회해 이메일·과정명으로 매칭했는데,
+      //  목록 조회가 최대 100건까지만 내려오는 상한 때문에 사용자가 100명을 넘으면
+      //  뒤쪽 사용자의 과정 매핑이 조용히 누락됐다. 서버 쪽에서 처리하면 이 문제가 없다.)
       const bulkUsers: BulkUserInput[] = excelPreview.map((r) => ({
         name: r['이름'].toString().trim(),
         email: r['이메일'].toString().trim(),
         password: r['비밀번호(8자 이상)'].toString(),
         role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
+        courseName: r['과정명(선택)']?.toString().trim() || undefined,
       }));
       const result = await usersApi.bulkCreate(bulkUsers);
-
-      // 과정 자동 배정
-      const rowsWithCourse = excelPreview.filter((r) => r['과정명(선택)']?.toString().trim());
-      if (rowsWithCourse.length > 0 && result.success > 0) {
-        const failedEmails = new Set(result.failed.map((f) => f.email));
-        const rowsToAssign = rowsWithCourse.filter(
-          (r) => !failedEmails.has(r['이메일'].toString().trim()),
-        );
-        if (rowsToAssign.length > 0) {
-          const [coursesRes, usersRes] = await Promise.all([
-            coursesApi.getAll({ limit: 500 }),
-            usersApi.getAll({ limit: 500 }),
-          ]);
-          // courseId → [userId] 맵
-          const courseMap = new Map<string, string[]>();
-          for (const row of rowsToAssign) {
-            const courseName = row['과정명(선택)']!.toString().trim();
-            const course = coursesRes.data.find((c) => c.name === courseName);
-            const user = usersRes.data.find((u) => u.email === row['이메일'].toString().trim());
-            if (course && user) {
-              const ids = courseMap.get(course.id) ?? [];
-              ids.push(user.id);
-              courseMap.set(course.id, ids);
-            }
-          }
-          await Promise.all(
-            Array.from(courseMap.entries()).map(([courseId, userIds]) =>
-              coursesApi.bulkAssignUsers(courseId, userIds),
-            ),
-          );
-        }
-      }
 
       setUploadResult(result);
       setExcelPreview([]);
@@ -518,6 +491,17 @@ export default function AdminUsersPage() {
                   <p className="text-[var(--danger-text)]">{uploadResult.failed.length}명 실패:</p>
                   {uploadResult.failed.map((f, i) => (
                     <p key={i} className="ml-2 text-[var(--danger-text)]">• {f.email}: {f.reason}</p>
+                  ))}
+                </div>
+              )}
+              {uploadResult.courseAssigned > 0 && (
+                <p className="mt-1.5 text-[var(--text-secondary)]">과정 매핑 {uploadResult.courseAssigned}명 완료</p>
+              )}
+              {uploadResult.courseFailed.length > 0 && (
+                <div className="mt-1.5">
+                  <p className="text-[var(--warning-text)]">과정 매핑 실패 {uploadResult.courseFailed.length}명 (계정은 생성됨, 과정만 수동으로 배정해주세요):</p>
+                  {uploadResult.courseFailed.map((f, i) => (
+                    <p key={i} className="ml-2 text-[var(--warning-text)]">• {f.email}: {f.reason}</p>
                   ))}
                 </div>
               )}

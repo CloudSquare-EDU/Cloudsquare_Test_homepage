@@ -97,16 +97,53 @@ export const updateUserRole = async (userId: string, role: Role) => {
 
 // 사용자 일괄 생성 (엑셀 업로드용)
 // 실패한 항목은 건너뛰고 성공/실패 결과를 반환
+//
+// courseName이 함께 오면 계정 생성 직후 서버에서 바로 과정을 매핑한다.
+// (예전에는 프론트에서 사용자/과정 "전체 목록"을 조회한 뒤 이메일·과정명으로
+//  매칭했는데, 목록 조회 API가 최대 100건까지만 내려주는 상한이 있어서
+//  사용자가 100명을 넘으면 뒤쪽 사용자가 매칭에서 조용히 누락되는 문제가 있었다.
+//  서버에서 생성과 동시에 매핑하면 이 문제가 아예 발생하지 않는다.)
 export const bulkCreateUsers = async (
-  users: CreateUserInput[],
-): Promise<{ success: number; failed: { email: string; reason: string }[] }> => {
+  users: (CreateUserInput & { courseName?: string })[],
+): Promise<{
+  success: number;
+  failed: { email: string; reason: string }[];
+  courseAssigned: number;
+  courseFailed: { email: string; reason: string }[];
+}> => {
   const failed: { email: string; reason: string }[] = [];
+  const courseFailed: { email: string; reason: string }[] = [];
   let success = 0;
+  let courseAssigned = 0;
 
-  for (const input of users) {
+  // 같은 과정명을 매번 다시 조회하지 않도록 캐시
+  const courseIdCache = new Map<string, string | null>();
+  const resolveCourseId = async (courseName: string): Promise<string | null> => {
+    if (courseIdCache.has(courseName)) return courseIdCache.get(courseName) ?? null;
+    const course = await prisma.course.findFirst({ where: { name: courseName } });
+    const courseId = course?.id ?? null;
+    courseIdCache.set(courseName, courseId);
+    return courseId;
+  };
+
+  for (const { courseName, ...input } of users) {
     try {
-      await createUser(input);
+      const user = await createUser(input);
       success++;
+
+      const trimmedCourseName = courseName?.trim();
+      if (trimmedCourseName) {
+        const courseId = await resolveCourseId(trimmedCourseName);
+        if (courseId) {
+          await prisma.user.update({ where: { id: user.id }, data: { courseId } });
+          courseAssigned++;
+        } else {
+          courseFailed.push({
+            email: input.email,
+            reason: `'${trimmedCourseName}' 과정을 찾을 수 없습니다.`,
+          });
+        }
+      }
     } catch (err) {
       failed.push({
         email: input.email,
@@ -115,7 +152,7 @@ export const bulkCreateUsers = async (
     }
   }
 
-  return { success, failed };
+  return { success, failed, courseAssigned, courseFailed };
 };
 
 // 관리자가 특정 사용자 비밀번호 초기화

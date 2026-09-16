@@ -77,6 +77,8 @@ const bulkCreateUserSchema = z.object({
         password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다.'),
         name: z.string().min(1, '이름을 입력해주세요.'),
         role: z.enum(['USER', 'ADMIN']).optional(),
+        // 엑셀의 '과정명(선택)' 컬럼 — 있으면 계정 생성과 동시에 서버에서 과정을 매핑한다.
+        courseName: z.string().trim().min(1).optional(),
       }),
     )
     .min(1, '최소 1명 이상의 사용자가 필요합니다.'),
