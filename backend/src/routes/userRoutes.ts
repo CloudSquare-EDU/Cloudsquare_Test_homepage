@@ -13,7 +13,10 @@ userRoutes.get('/', authenticate, requireAdmin, userController.getAllUsers);
 // POST /users — 사용자 계정 직접 생성
 userRoutes.post('/', authenticate, requireAdmin, userController.createUser);
 
-// POST /users/bulk — 사용자 일괄 생성 (엑셀 업로드용)
+// POST /users/bulk/check — 엑셀 일괄 등록 전, 이미 존재하는 이메일 조회 (덮어쓰기 확인용)
+userRoutes.post('/bulk/check', authenticate, requireAdmin, userController.checkExistingUsers);
+
+// POST /users/bulk — 사용자 일괄 생성/덮어쓰기 (엑셀 업로드용)
 userRoutes.post('/bulk', authenticate, requireAdmin, userController.bulkCreateUsers);
 
 // PATCH /users/me/password — 본인 비밀번호 변경 (인증 사용자) ← /:id보다 반드시 먼저

@@ -32,9 +32,25 @@ export interface BulkUserInput {
 
 export interface BulkUserResult {
   success: number;
+  updated: number;
   failed: { email: string; reason: string }[];
   courseAssigned: number;
   courseFailed: { email: string; reason: string }[];
+}
+
+export interface BulkUserOptions {
+  // 이미 존재하는 이메일을 실패 처리하지 않고 덮어쓸지 여부
+  overwriteExisting?: boolean;
+  // 덮어쓸 때 비밀번호도 엑셀 값으로 교체할지 여부 (기본: 기존 비밀번호 유지)
+  overwritePassword?: boolean;
+}
+
+export interface ExistingUserInfo {
+  email: string;
+  name: string;
+  role: 'USER' | 'ADMIN';
+  courseName: string | null;
+  courseArchived: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -60,9 +76,13 @@ export const usersApi = {
   create: (data: { email: string; password: string; name: string; role?: 'USER' | 'ADMIN' }) =>
     apiClient.post<UserSummary>('/users', data),
 
-  // 사용자 일괄 생성 (엑셀 업로드용)
-  bulkCreate: (users: BulkUserInput[]) =>
-    apiClient.post<BulkUserResult>('/users/bulk', { users }),
+  // 엑셀 일괄 등록 전, 이미 존재하는 이메일 조회 (덮어쓰기 확인용)
+  checkExisting: (emails: string[]) =>
+    apiClient.post<{ existing: ExistingUserInfo[] }>('/users/bulk/check', { emails }),
+
+  // 사용자 일괄 생성/덮어쓰기 (엑셀 업로드용)
+  bulkCreate: (users: BulkUserInput[], options?: BulkUserOptions) =>
+    apiClient.post<BulkUserResult>('/users/bulk', { users, ...options }),
 
   // role 변경
   updateRole: (userId: string, role: 'USER' | 'ADMIN') =>

@@ -99,6 +99,38 @@ export const updateUserRole = async (userId: string, role: Role) => {
   });
 };
 
+// 엑셀 일괄 등록 전에 "이미 존재하는 이메일"을 미리 조회한다.
+// - 보관된 과정에 속해 있어 목록에서는 보이지 않는 계정도 포함해서 찾는다.
+//   (과거 수강생을 새 과정에 다시 매핑하는 것이 주된 사용 목적이기 때문)
+export const findExistingUsersByEmails = async (emails: string[]) => {
+  const uniqueEmails = Array.from(new Set(emails));
+  const found = await prisma.user.findMany({
+    where: { email: { in: uniqueEmails } },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      course: { select: { id: true, name: true, isArchived: true } },
+    },
+  });
+  return found.map((u) => ({
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    courseName: u.course?.name ?? null,
+    courseArchived: u.course?.isArchived ?? false,
+  }));
+};
+
+interface BulkOptions {
+  // true면 이미 존재하는 이메일을 실패 처리하지 않고 덮어쓴다(이름 갱신 + 과정 매핑).
+  overwriteExisting?: boolean;
+  // true면 덮어쓸 때 비밀번호도 엑셀 값으로 교체한다(이 경우 다음 로그인 때 변경을 요구).
+  // false면 기존 비밀번호는 그대로 유지 — 학생이 이미 바꾼 비밀번호를 실수로 되돌리지 않기 위함.
+  overwritePassword?: boolean;
+}
+
 // 사용자 일괄 생성 (엑셀 업로드용)
 // 실패한 항목은 건너뛰고 성공/실패 결과를 반환
 //
@@ -107,17 +139,28 @@ export const updateUserRole = async (userId: string, role: Role) => {
 //  매칭했는데, 목록 조회 API가 최대 100건까지만 내려주는 상한이 있어서
 //  사용자가 100명을 넘으면 뒤쪽 사용자가 매칭에서 조용히 누락되는 문제가 있었다.
 //  서버에서 생성과 동시에 매핑하면 이 문제가 아예 발생하지 않는다.)
+//
+// overwriteExisting 옵션이 켜져 있으면, 이미 존재하는 이메일은 "기존 계정 갱신"으로 처리한다.
+//  - 이름: 엑셀 값으로 갱신
+//  - 과정: 엑셀에 과정명이 있을 때만 변경 (비어 있으면 기존 과정 유지 — 실수로 과정이 풀리지 않도록)
+//  - 비밀번호: overwritePassword가 true일 때만 교체
+//  - 권한(role): 변경하지 않음 (권한 변경은 별도 기능으로만)
+//  - 관리자(ADMIN) 계정: 안전을 위해 건드리지 않고 실패 목록에 사유를 남김
 export const bulkCreateUsers = async (
   users: (CreateUserInput & { courseName?: string })[],
+  options: BulkOptions = {},
 ): Promise<{
   success: number;
+  updated: number;
   failed: { email: string; reason: string }[];
   courseAssigned: number;
   courseFailed: { email: string; reason: string }[];
 }> => {
+  const { overwriteExisting = false, overwritePassword = false } = options;
   const failed: { email: string; reason: string }[] = [];
   const courseFailed: { email: string; reason: string }[] = [];
   let success = 0;
+  let updated = 0;
   let courseAssigned = 0;
 
   // 같은 과정명을 매번 다시 조회하지 않도록 캐시
@@ -132,14 +175,42 @@ export const bulkCreateUsers = async (
 
   for (const { courseName, ...input } of users) {
     try {
-      const user = await createUser(input);
-      success++;
-
       const trimmedCourseName = courseName?.trim();
+
+      // 1) 기존 계정이 있고 덮어쓰기 모드면 → 갱신
+      const existing = overwriteExisting
+        ? await prisma.user.findUnique({ where: { email: input.email } })
+        : null;
+
+      let userId: string;
+      if (existing) {
+        if (existing.role === Role.ADMIN) {
+          throw new AppError(
+            400,
+            ErrorCode.BAD_REQUEST,
+            '관리자 계정은 일괄 덮어쓰기 대상이 아닙니다.',
+          );
+        }
+        const data: Prisma.UserUpdateInput = { name: input.name };
+        if (overwritePassword) {
+          data.password = await bcrypt.hash(input.password, 12);
+          data.mustChangePassword = true;
+        }
+        await prisma.user.update({ where: { id: existing.id }, data });
+        userId = existing.id;
+        updated++;
+      } else {
+        // 2) 없으면 신규 생성 (덮어쓰기 모드가 아니면 기존 이메일은 여기서 409로 실패 처리됨)
+        const user = await createUser(input);
+        userId = user.id;
+        success++;
+      }
+
+      // 3) 과정 매핑 (신규/기존 공통)
       if (trimmedCourseName) {
         const courseId = await resolveCourseId(trimmedCourseName);
         if (courseId) {
-          await prisma.user.update({ where: { id: user.id }, data: { courseId } });
+          await prisma.user.update({ where: { id: userId }, data: { courseId } });
           courseAssigned++;
         } else {
           courseFailed.push({
@@ -156,7 +227,7 @@ export const bulkCreateUsers = async (
     }
   }
 
-  return { success, failed, courseAssigned, courseFailed };
+  return { success, updated, failed, courseAssigned, courseFailed };
 };
 
 // 관리자가 특정 사용자 비밀번호 초기화

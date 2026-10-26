@@ -82,7 +82,30 @@ const bulkCreateUserSchema = z.object({
       }),
     )
     .min(1, '최소 1명 이상의 사용자가 필요합니다.'),
+  // 이미 존재하는 이메일을 실패 처리하지 않고 덮어쓸지 여부 (프론트에서 관리자 확인 후 true로 전송)
+  overwriteExisting: z.boolean().optional(),
+  // 덮어쓸 때 비밀번호도 엑셀 값으로 교체할지 여부 (기본: 기존 비밀번호 유지)
+  overwritePassword: z.boolean().optional(),
 });
+
+const checkExistingSchema = z.object({
+  emails: z.array(z.string().trim().min(1)).min(1, '이메일 목록이 비어 있습니다.'),
+});
+
+// 엑셀 일괄 등록 전, 이미 존재하는 이메일 목록을 조회 (확인 팝업용)
+export const checkExistingUsers = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { emails } = checkExistingSchema.parse(req.body);
+    const existing = await userService.findExistingUsersByEmails(emails);
+    res.json({ success: true, data: { existing } });
+  } catch (err) {
+    next(err);
+  }
+};
 
 export const bulkCreateUsers = async (
   req: AuthRequest,
@@ -90,9 +113,10 @@ export const bulkCreateUsers = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { users } = bulkCreateUserSchema.parse(req.body);
+    const { users, overwriteExisting, overwritePassword } = bulkCreateUserSchema.parse(req.body);
     const result = await userService.bulkCreateUsers(
       users.map((u) => ({ ...u, role: u.role as Role | undefined })),
+      { overwriteExisting, overwritePassword },
     );
     res.status(201).json({ success: true, data: result });
   } catch (err) {

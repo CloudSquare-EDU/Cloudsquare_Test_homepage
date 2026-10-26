@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, FormEvent } from 'react';
 import * as XLSX from 'xlsx';
-import { usersApi, UserSummary, BulkUserInput, BulkUserResult } from '@/lib/api/users';
+import { usersApi, UserSummary, BulkUserInput, BulkUserResult, ExistingUserInfo } from '@/lib/api/users';
 import { coursesApi } from '@/lib/api/courses';
 import { CourseSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -57,6 +57,9 @@ export default function AdminUsersPage() {
   const [excelError, setExcelError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<BulkUserResult | null>(null);
+  // 엑셀에 이미 존재하는 이메일이 있을 때 띄우는 "덮어쓰기 확인" 모달 상태
+  const [existingConflicts, setExistingConflicts] = useState<ExistingUserInfo[] | null>(null);
+  const [overwritePassword, setOverwritePassword] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -207,28 +210,70 @@ export default function AdminUsersPage() {
     reader.readAsArrayBuffer(file);
   };
 
+  // 엑셀 행 → 서버 전송용 데이터
+  const toBulkUser = (r: ExcelUserRow): BulkUserInput => ({
+    name: r['이름'].toString().trim(),
+    email: r['이메일'].toString().trim(),
+    password: r['비밀번호(8자 이상)'].toString(),
+    role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
+    courseName: r['과정명(선택)']?.toString().trim() || undefined,
+  });
+
+  const finishUpload = (result: BulkUserResult) => {
+    setUploadResult(result);
+    setExcelPreview([]);
+    setExistingConflicts(null);
+    setOverwritePassword(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    loadUsers();
+  };
+
+  // "N명 계정 생성" 버튼: 먼저 이미 존재하는 이메일이 있는지 확인하고,
+  // 있으면 덮어쓸지 한 번 더 물어본다. 없으면 바로 등록한다.
   const handleExcelUpload = async () => {
     if (excelPreview.length === 0) return;
     setIsUploading(true);
     setError(null);
     try {
+      const bulkUsers = excelPreview.map(toBulkUser);
       // 과정명은 서버로 그대로 넘기고, 계정 생성과 동시에 서버에서 과정을 매핑한다.
-      // (예전엔 여기서 사용자/과정 전체 목록을 다시 조회해 이메일·과정명으로 매칭했는데,
-      //  목록 조회가 최대 100건까지만 내려오는 상한 때문에 사용자가 100명을 넘으면
-      //  뒤쪽 사용자의 과정 매핑이 조용히 누락됐다. 서버 쪽에서 처리하면 이 문제가 없다.)
-      const bulkUsers: BulkUserInput[] = excelPreview.map((r) => ({
-        name: r['이름'].toString().trim(),
-        email: r['이메일'].toString().trim(),
-        password: r['비밀번호(8자 이상)'].toString(),
-        role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
-        courseName: r['과정명(선택)']?.toString().trim() || undefined,
-      }));
-      const result = await usersApi.bulkCreate(bulkUsers);
+      // (목록 API의 100건 상한에 걸리지 않도록 서버에서 처리)
+      const { existing } = await usersApi.checkExisting(bulkUsers.map((u) => u.email));
+      if (existing.length > 0) {
+        setOverwritePassword(false);
+        setExistingConflicts(existing);
+        return;
+      }
+      finishUpload(await usersApi.bulkCreate(bulkUsers));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
-      setUploadResult(result);
-      setExcelPreview([]);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      loadUsers();
+  // 확인 모달에서 선택 후 실제 등록 실행
+  //  - overwrite=true : 기존 계정은 갱신(이름·과정 등), 새 이메일은 신규 생성
+  //  - overwrite=false: 기존 이메일 행은 제외하고 새 이메일만 생성
+  const handleConfirmExisting = async (overwrite: boolean) => {
+    if (!existingConflicts) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const existingEmails = new Set(existingConflicts.map((u) => u.email));
+      const allUsers = excelPreview.map(toBulkUser);
+      const targets = overwrite ? allUsers : allUsers.filter((u) => !existingEmails.has(u.email));
+      if (targets.length === 0) {
+        // 전부 기존 계정이고 덮어쓰지 않기로 한 경우 — 할 일이 없음
+        setExistingConflicts(null);
+        setError('신규로 등록할 계정이 없습니다. (모두 이미 존재하는 이메일입니다)');
+        return;
+      }
+      const result = await usersApi.bulkCreate(
+        targets,
+        overwrite ? { overwriteExisting: true, overwritePassword } : undefined,
+      );
+      finishUpload(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '업로드 중 오류가 발생했습니다.');
     } finally {
@@ -502,7 +547,10 @@ export default function AdminUsersPage() {
 
           {uploadResult && (
             <div className="mb-3 rounded-md border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-2 text-xs">
-              <p className="font-medium text-[var(--success-text)]">{uploadResult.success}명 생성 완료</p>
+              <p className="font-medium text-[var(--success-text)]">
+                {uploadResult.success}명 생성 완료
+                {uploadResult.updated > 0 && ` · 기존 계정 ${uploadResult.updated}명 덮어쓰기(갱신) 완료`}
+              </p>
               {uploadResult.failed.length > 0 && (
                 <div className="mt-1.5">
                   <p className="text-[var(--danger-text)]">{uploadResult.failed.length}명 실패:</p>
@@ -516,7 +564,7 @@ export default function AdminUsersPage() {
               )}
               {uploadResult.courseFailed.length > 0 && (
                 <div className="mt-1.5">
-                  <p className="text-[var(--warning-text)]">과정 매핑 실패 {uploadResult.courseFailed.length}명 (계정은 생성됨, 과정만 수동으로 배정해주세요):</p>
+                  <p className="text-[var(--warning-text)]">과정 매핑 실패 {uploadResult.courseFailed.length}명 (계정은 처리됨, 과정만 수동으로 배정해주세요):</p>
                   {uploadResult.courseFailed.map((f, i) => (
                     <p key={i} className="ml-2 text-[var(--warning-text)]">• {f.email}: {f.reason}</p>
                   ))}
@@ -746,6 +794,96 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* ── 엑셀 일괄 등록: 기존 이메일 덮어쓰기 확인 모달 ── */}
+      {existingConflicts && (() => {
+        const excelByEmail = new Map(excelPreview.map((r) => [r['이메일']?.toString().trim(), r]));
+        const overwritableCount = existingConflicts.filter((u) => u.role !== 'ADMIN').length;
+        const newCount = excelPreview.length - existingConflicts.length;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => !isUploading && setExistingConflicts(null)}
+            />
+            <div className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-[var(--border-hover)] bg-[var(--bg-surface)] p-6 shadow-2xl">
+              <h2 className="mb-1 text-base font-semibold text-[var(--text-primary)]">
+                이미 등록된 이메일이 {existingConflicts.length}건 있습니다
+              </h2>
+              <p className="mb-4 text-sm leading-relaxed text-[var(--text-muted)]">
+                덮어쓰면 기존 계정의 <span className="text-[var(--text-secondary)]">이름</span>이 엑셀 값으로 갱신되고,
+                엑셀에 <span className="text-[var(--text-secondary)]">과정명</span>이 있으면 그 과정으로 다시 매핑됩니다.
+                과정명이 비어 있으면 기존 과정은 그대로 유지됩니다.
+              </p>
+
+              <div className="mb-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
+                {existingConflicts.map((u) => {
+                  const row = excelByEmail.get(u.email);
+                  const newCourse = row?.['과정명(선택)']?.toString().trim();
+                  const isAdmin = u.role === 'ADMIN';
+                  return (
+                    <div key={u.email} className="border-b border-[var(--border-subtle)] px-4 py-2.5 text-xs last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-[var(--text-primary)]">{u.name}</span>
+                        <span className="text-[var(--text-muted)]">{u.email}</span>
+                        {isAdmin && (
+                          <span className="rounded bg-[var(--bg-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--warning-text)]">
+                            관리자 계정 · 덮어쓰기 제외
+                          </span>
+                        )}
+                      </div>
+                      {!isAdmin && (
+                        <p className="mt-1 text-[var(--text-faint)]">
+                          과정:{' '}
+                          <span className="text-[var(--text-secondary)]">
+                            {u.courseName ? `${u.courseName}${u.courseArchived ? ' (보관됨)' : ''}` : '미배정'}
+                          </span>
+                          {' → '}
+                          <span className={newCourse ? 'font-medium text-[#5e6ad2]' : 'text-[var(--text-secondary)]'}>
+                            {newCourse ?? '변경 없음'}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <label className="mb-4 flex cursor-pointer items-start gap-2 text-xs text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={overwritePassword}
+                  onChange={(e) => setOverwritePassword(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  비밀번호도 엑셀 값으로 덮어쓰기
+                  <span className="block text-[var(--text-faint)]">
+                    체크하지 않으면 기존 비밀번호가 유지됩니다. 체크하면 해당 계정은 다음 로그인 때 비밀번호 변경을 요구받습니다.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-[var(--text-faint)]">
+                  덮어쓰기 {overwritableCount}명 · 신규 생성 {newCount}명
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" disabled={isUploading} onClick={() => setExistingConflicts(null)}>
+                    취소
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={isUploading} onClick={() => handleConfirmExisting(false)}>
+                    기존 건 제외하고 신규만 등록
+                  </Button>
+                  <Button size="sm" isLoading={isUploading} onClick={() => handleConfirmExisting(true)}>
+                    덮어쓰고 등록
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 과정 일괄 배정 모달 ── */}
       {showBulkCourseModal && (
