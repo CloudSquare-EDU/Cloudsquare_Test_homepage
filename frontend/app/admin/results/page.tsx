@@ -36,7 +36,17 @@ export default function AdminResultsPage() {
     userName: string;
     examTitle: string;
     examId: string;
+    attemptNo?: number;
+    attemptCount?: number;
   } | null>(null);
+  // 재응시 이력(회차별 기록) 펼침 상태 — 키: `${examId}:${userId}`
+  const [expandedAttempts, setExpandedAttempts] = useState<Set<string>>(new Set());
+  const toggleAttempts = (key: string) =>
+    setExpandedAttempts((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,14 +139,32 @@ export default function AdminResultsPage() {
       응시일시: u.submitted && u.submission
         ? new Date(u.submission.submittedAt).toLocaleString('ko-KR')
         : '',
+      응시횟수: u.attemptCount ?? (u.submitted ? 1 : 0),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-      { wch: 12 }, { wch: 24 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 18 },
+      { wch: 12 }, { wch: 24 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 18 }, { wch: 8 },
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '응시결과');
+    XLSX.utils.book_append_sheet(wb, ws, '응시결과'); // 점수는 가장 최근 회차 기준
+
+    // 재응시한 사람이 있으면 회차별 전체 기록 시트를 추가
+    const attemptRows = status.users.flatMap((u) =>
+      (u.attempts ?? []).map((a) => ({
+        이름: u.userName,
+        이메일: u.userEmail,
+        회차: a.attemptNo,
+        점수: a.score ?? '',
+        총문항: a.totalQuestions,
+        응시일시: new Date(a.submittedAt).toLocaleString('ko-KR'),
+      })),
+    );
+    if (status.users.some((u) => (u.attemptCount ?? 0) > 1)) {
+      const ws2 = XLSX.utils.json_to_sheet(attemptRows);
+      ws2['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 6 }, { wch: 6 }, { wch: 8 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, ws2, '회차별기록');
+    }
     XLSX.writeFile(wb, `${examTitle}_응시결과.xlsx`);
   };
 
@@ -320,7 +348,7 @@ export default function AdminResultsPage() {
                           {getFilteredSorted(exam.id, status.users).map((userStatus: ExamUserStatus) => (
                             <div
                               key={userStatus.userId}
-                              className="px-5 py-3.5 flex flex-col md:flex-row md:items-center md:gap-3"
+                              className="px-5 py-3.5 flex flex-col md:flex-row md:flex-wrap md:items-center md:gap-3"
                             >
                               {/* 사용자 정보 + 점수 뱃지 (모바일: 한 행, 데스크탑: 좌측) */}
                               <div className="flex flex-1 min-w-0 items-center justify-between gap-3 md:justify-start">
@@ -344,6 +372,11 @@ export default function AdminResultsPage() {
                                       {Math.round(((userStatus.submission.score ?? 0) / 100) * userStatus.submission.totalQuestions)}
                                       /{userStatus.submission.totalQuestions}
                                     </span>
+                                    {(userStatus.attemptCount ?? 1) > 1 && (
+                                      <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.1)] text-[#5e6ad2]">
+                                        최근 {userStatus.submission.attemptNo ?? userStatus.attemptCount}회차 · 총 {userStatus.attemptCount}회
+                                      </span>
+                                    )}
                                   </div>
                                 ) : (
                                   <span className="rounded px-2 py-0.5 text-xs bg-[var(--bg-raised)] text-[var(--text-faint)] shrink-0">
@@ -361,6 +394,15 @@ export default function AdminResultsPage() {
                                       {' '}
                                       {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
+                                    {(userStatus.attemptCount ?? 1) > 1 && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => toggleAttempts(`${exam.id}:${userStatus.userId}`)}
+                                      >
+                                        응시 이력 {expandedAttempts.has(`${exam.id}:${userStatus.userId}`) ? '닫기' : `(${userStatus.attemptCount})`}
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -380,6 +422,8 @@ export default function AdminResultsPage() {
                                           userName: userStatus.userName,
                                           examTitle: exam.title,
                                           examId: exam.id,
+                                          attemptNo: userStatus.submission!.attemptNo,
+                                          attemptCount: userStatus.attemptCount,
                                         })
                                       }
                                     >
@@ -396,6 +440,34 @@ export default function AdminResultsPage() {
                                   </Button>
                                 )}
                               </div>
+
+                              {/* 재응시 이력 — 모든 회차의 기록을 확인할 수 있다 (대표 점수는 가장 최근 회차) */}
+                              {expandedAttempts.has(`${exam.id}:${userStatus.userId}`) && (userStatus.attempts?.length ?? 0) > 0 && (
+                                <div className="mt-2.5 w-full basis-full rounded-lg border border-[var(--border)] bg-[var(--bg-inset)]">
+                                  {[...(userStatus.attempts ?? [])].reverse().map((a, i) => (
+                                    <div
+                                      key={a.id}
+                                      className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-2 text-xs last:border-0"
+                                    >
+                                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                                        <span className="font-medium text-[var(--text-primary)]">{a.attemptNo}회차</span>
+                                        {i === 0 && (
+                                          <span className="rounded bg-[rgba(94,106,210,0.1)] px-1.5 py-0.5 text-[10px] font-medium text-[#5e6ad2]">
+                                            최근 (대표 점수)
+                                          </span>
+                                        )}
+                                        <span className={`rounded px-1.5 py-0.5 font-bold ${scoreBadge(a.score)}`}>{a.score ?? '-'}점</span>
+                                        <span className="text-[var(--text-faint)]">
+                                          {new Date(a.submittedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      <Link href={`/submissions/${a.id}`}>
+                                        <Button variant="ghost" size="sm">결과 보기</Button>
+                                      </Link>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -427,7 +499,9 @@ export default function AdminResultsPage() {
         title="재응시를 허용하시겠습니까?"
         message={
           resetTarget
-            ? `[${resetTarget.examTitle}] 시험에서 ${resetTarget.userName}의 응시 기록이 삭제되어 재응시가 가능해집니다.`
+            ? (resetTarget.attemptCount ?? 1) > 1
+              ? `[${resetTarget.examTitle}] 시험에서 ${resetTarget.userName}의 가장 최근 기록(${resetTarget.attemptNo ?? resetTarget.attemptCount}회차)만 삭제됩니다. 이전 회차 기록은 그대로 유지됩니다.`
+              : `[${resetTarget.examTitle}] 시험에서 ${resetTarget.userName}의 응시 기록이 삭제되어 재응시가 가능해집니다.`
             : ''
         }
         confirmLabel="재응시 허용"

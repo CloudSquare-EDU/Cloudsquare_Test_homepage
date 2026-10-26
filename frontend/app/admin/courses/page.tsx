@@ -42,6 +42,9 @@ export default function AdminCoursesPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 재응시 허용 토글
+  const [retakeUpdatingId, setRetakeUpdatingId] = useState<string | null>(null);
+
   // 보관 / 보관 해제
   const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -148,6 +151,26 @@ export default function AdminCoursesPage() {
       setError(err instanceof ApiError ? err.message : '삭제 중 오류가 발생했습니다.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // ── 재응시 허용 설정 ─────────────────────────────────────────
+  // 켜면 이 과정의 자기주도학습 시험을 수강생이 여러 번 응시할 수 있다 (실제시험은 항상 1회)
+  const handleToggleRetake = async (course: CourseSummary) => {
+    setRetakeUpdatingId(course.id);
+    try {
+      const next = !course.allowRetake;
+      await coursesApi.setAllowRetake(course.id, next);
+      setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, allowRetake: next } : c)));
+      showSuccess(
+        next
+          ? `'${course.name}' 과정의 자기주도학습 시험을 재응시할 수 있습니다. (실제시험은 계속 1회만 응시)`
+          : `'${course.name}' 과정의 재응시가 불가로 변경되었습니다. 이미 응시한 기록은 그대로 유지됩니다.`,
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '재응시 설정 변경 중 오류가 발생했습니다.');
+    } finally {
+      setRetakeUpdatingId(null);
     }
   };
 
@@ -392,6 +415,10 @@ export default function AdminCoursesPage() {
                         <span>계정 {course._count.users}명</span>
                         <span className="text-[var(--border)]">·</span>
                         <span>시험 {course._count.exams}개</span>
+                        <span className="text-[var(--border)]">·</span>
+                        <span className={course.allowRetake ? 'text-[#5e6ad2]' : ''}>
+                          재응시 {course.allowRetake ? '허용' : '불가'}
+                        </span>
                       </div>
                     </div>
                     <svg
@@ -411,6 +438,14 @@ export default function AdminCoursesPage() {
                         </Button>
                         <Button variant="secondary" size="sm" onClick={() => openAssignExams(course.id)}>
                           시험 배정
+                        </Button>
+                        <Button
+                          variant={course.allowRetake ? 'primary' : 'secondary'}
+                          size="sm"
+                          isLoading={retakeUpdatingId === course.id}
+                          onClick={() => handleToggleRetake(course)}
+                        >
+                          재응시 {course.allowRetake ? 'ON' : 'OFF'}
                         </Button>
                         <Button variant="secondary" size="sm" onClick={() => setArchiveTargetId(course.id)}>
                           보관

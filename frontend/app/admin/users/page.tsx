@@ -16,10 +16,10 @@ import { downloadSampleExcel } from '@/lib/utils';
 const handleDownloadUserSample = () => {
   downloadSampleExcel(
     [
-      ['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)'],
-      ['홍길동', 'hong@example.com', 'password123', 'USER', '2025 클라우드 기초'],
-      ['김관리', 'admin@example.com', 'admin1234', 'USER', ''],
-      ['이수강', 'lee@example.com', 'pass5678', 'USER', '2025 클라우드 기초'],
+      ['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)', '학번(선택)', 'NCP 실습계정(선택)'],
+      ['홍길동', 'hong@example.com', 'password123', 'USER', '2025 클라우드 기초', '2019010726', 'hong_ncp@example.com'],
+      ['김관리', 'admin@example.com', 'admin1234', 'USER', '', '', ''],
+      ['이수강', 'lee@example.com', 'pass5678', 'USER', '2025 클라우드 기초', '2020012345', 'lee_ncp@example.com'],
     ],
     '사용자목록',
     '계정_일괄생성_샘플',
@@ -32,6 +32,8 @@ interface ExcelUserRow {
   '비밀번호(8자 이상)': string;
   '권한(USER/ADMIN)': string;
   '과정명(선택)'?: string;
+  '학번(선택)'?: string | number;
+  'NCP 실습계정(선택)'?: string;
 }
 
 
@@ -46,10 +48,14 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  // 과정별 보기: '' = 전체, 'none' = 과정 미배정, 그 외 = 과정 ID
+  const [courseFilter, setCourseFilter] = useState('');
+  const [filterCourses, setFilterCourses] = useState<CourseSummary[]>([]);
 
   const [createMode, setCreateMode] = useState<'single' | 'excel' | null>(null);
   const [createForm, setCreateForm] = useState({
     name: '', email: '', password: '', role: 'USER' as 'USER' | 'ADMIN',
+    studentNumber: '', ncpAccountId: '',
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -109,6 +115,12 @@ export default function AdminUsersPage() {
 
   // 과정 배정 모달 (단일 사용자)
   const [courseTarget, setCourseTarget] = useState<UserSummary | null>(null);
+
+  // 사용자 정보 수정(이름/학번/NCP 실습 계정)
+  const [profileTarget, setProfileTarget] = useState<UserSummary | null>(null);
+  const [profileForm, setProfileForm] = useState({ name: '', studentNumber: '', ncpAccountId: '' });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [allCourses, setAllCourses] = useState<CourseSummary[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const [isAssigningCourse, setIsAssigningCourse] = useState(false);
@@ -122,9 +134,9 @@ export default function AdminUsersPage() {
   // 과정 배정 모달(단일) 검색어 — 과정이 많아지면 스크롤 대신 검색으로 찾도록
   const [courseModalSearch, setCourseModalSearch] = useState('');
 
-  const loadUsers = (p = page, s = search) => {
+  const loadUsers = (p = page, s = search, cf = courseFilter) => {
     setIsLoading(true);
-    usersApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined })
+    usersApi.getAll({ page: p, limit: PAGE_LIMIT, search: s || undefined, courseId: cf || undefined })
       .then((res) => {
         const sorted = [...res.data].sort((a, b) => {
           if (a.role === 'ADMIN' && b.role !== 'ADMIN') return -1;
@@ -141,7 +153,20 @@ export default function AdminUsersPage() {
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadUsers(page, search); }, [page, search]);
+  useEffect(() => { loadUsers(page, search, courseFilter); }, [page, search, courseFilter]);
+
+  // 과정별 보기 드롭다운용 과정 목록 (보관된 과정은 제외)
+  useEffect(() => {
+    coursesApi.getAll({ limit: 100 })
+      .then((res) => setFilterCourses(res.data))
+      .catch(() => { /* 필터 목록을 못 불러와도 전체 보기는 가능 */ });
+  }, []);
+
+  const handleCourseFilterChange = (value: string) => {
+    setCourseFilter(value);
+    setPage(1);
+    setSelectedIds(new Set());
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +181,7 @@ export default function AdminUsersPage() {
 
   const resetCreateMode = () => {
     setCreateMode(null);
-    setCreateForm({ name: '', email: '', password: '', role: 'USER' });
+    setCreateForm({ name: '', email: '', password: '', role: 'USER', studentNumber: '', ncpAccountId: '' });
     setExcelPreview([]);
     setExcelError(null);
     setUploadResult(null);
@@ -168,7 +193,11 @@ export default function AdminUsersPage() {
     setIsCreating(true);
     setError(null);
     try {
-      await usersApi.create(createForm);
+      await usersApi.create({
+        ...createForm,
+        studentNumber: createForm.studentNumber.trim() || undefined,
+        ncpAccountId: createForm.ncpAccountId.trim() || undefined,
+      });
       resetCreateMode();
       loadUsers();
     } catch (err) {
@@ -217,6 +246,8 @@ export default function AdminUsersPage() {
     password: r['비밀번호(8자 이상)'].toString(),
     role: r['권한(USER/ADMIN)'].toString().toUpperCase() as 'USER' | 'ADMIN',
     courseName: r['과정명(선택)']?.toString().trim() || undefined,
+    studentNumber: r['학번(선택)']?.toString().trim() || undefined,
+    ncpAccountId: r['NCP 실습계정(선택)']?.toString().trim() || undefined,
   });
 
   const finishUpload = (result: BulkUserResult) => {
@@ -392,6 +423,37 @@ export default function AdminUsersPage() {
     }
   };
 
+  const openProfileModal = (user: UserSummary) => {
+    setProfileTarget(user);
+    setProfileForm({
+      name: user.name,
+      studentNumber: user.studentNumber ?? '',
+      ncpAccountId: user.ncpAccountId ?? '',
+    });
+    setProfileError(null);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileTarget) return;
+    if (!profileForm.name.trim()) { setProfileError('이름을 입력해주세요.'); return; }
+    setIsSavingProfile(true);
+    setProfileError(null);
+    try {
+      // 빈 문자열을 보내면 서버에서 값이 삭제(null)된다
+      await usersApi.updateProfile(profileTarget.id, {
+        name: profileForm.name.trim(),
+        studentNumber: profileForm.studentNumber.trim(),
+        ncpAccountId: profileForm.ncpAccountId.trim(),
+      });
+      setProfileTarget(null);
+      loadUsers();
+    } catch (err) {
+      setProfileError(err instanceof ApiError ? err.message : '저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const handleRemoveCourse = async () => {
     if (!courseTarget || !courseTarget.courseId) return;
     setIsAssigningCourse(true);
@@ -471,6 +533,8 @@ export default function AdminUsersPage() {
             <Input label="이름" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} placeholder="홍길동" required autoFocus />
             <Input label="이메일" type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} placeholder="user@example.com" required />
             <Input label="비밀번호" type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="8자 이상" required />
+            <Input label="학번 (선택)" value={createForm.studentNumber} onChange={(e) => setCreateForm({ ...createForm, studentNumber: e.target.value })} placeholder="ID 찾기에 사용됩니다" />
+            <Input label="NCP 실습 계정 ID (선택)" value={createForm.ncpAccountId} onChange={(e) => setCreateForm({ ...createForm, ncpAccountId: e.target.value })} placeholder="배부한 네이버클라우드 계정 ID" />
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[var(--text-secondary)]">권한</label>
               <select
@@ -497,6 +561,7 @@ export default function AdminUsersPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">엑셀 일괄 계정 생성</h2>
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                 샘플 파일 형식에 맞춰 작성한 .xlsx 파일을 업로드하면 계정이 자동으로 생성됩니다.
+                학번·NCP 실습계정은 로그인 화면의 &quot;ID 찾기&quot;에 사용되며, 학번은 엑셀에서 &apos;텍스트&apos; 서식으로 입력해 주세요(앞자리 0 유지).
               </p>
             </div>
             <Button variant="secondary" size="sm" onClick={handleDownloadUserSample}>
@@ -511,7 +576,7 @@ export default function AdminUsersPage() {
               <table className="w-full text-[var(--text-muted)]">
                 <thead>
                   <tr className="border-b border-[var(--border-subtle)]">
-                    {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)'].map((h) => (
+                    {['이름', '이메일', '비밀번호(8자 이상)', '권한(USER/ADMIN)', '과정명(선택)', '학번(선택)', 'NCP 실습계정(선택)'].map((h) => (
                       <th key={h} className="pb-1.5 pr-4 text-left font-medium text-[var(--text-secondary)]">{h}</th>
                     ))}
                   </tr>
@@ -523,6 +588,8 @@ export default function AdminUsersPage() {
                     <td className="pt-1.5 pr-4">password123</td>
                     <td className="pt-1.5 pr-4 text-[#5e6ad2]">USER</td>
                     <td className="pt-1.5 pr-4 text-[var(--text-faint)]">2025 클라우드 기초</td>
+                    <td className="pt-1.5 pr-4 text-[var(--text-faint)]">2019010726</td>
+                    <td className="pt-1.5 pr-4 text-[var(--text-faint)]">hong_ncp@example.com</td>
                   </tr>
                 </tbody>
               </table>
@@ -584,6 +651,9 @@ export default function AdminUsersPage() {
                       <div className="min-w-0 flex-1">
                         <span className="font-medium text-[var(--text-primary)]">{row['이름']}</span>
                         <span className="ml-2 text-[var(--text-muted)]">{row['이메일']}</span>
+                        {row['학번(선택)']?.toString().trim() && (
+                          <span className="ml-2 text-[10px] text-[var(--text-faint)]">학번 {row['학번(선택)']}</span>
+                        )}
                         {row['과정명(선택)']?.toString().trim() && (
                           <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.1)] text-[#5e6ad2]">
                             {row['과정명(선택)']}
@@ -621,7 +691,28 @@ export default function AdminUsersPage() {
         {search && (
           <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchInput(''); setSearch(''); setPage(1); }}>초기화</Button>
         )}
+        <select
+          value={courseFilter}
+          onChange={(e) => handleCourseFilterChange(e.target.value)}
+          aria-label="과정별 보기"
+          className="h-8 max-w-[220px] rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#5e6ad2]"
+        >
+          <option value="">전체 과정</option>
+          <option value="none">과정 미배정</option>
+          {filterCourses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name} ({c._count.users}명)</option>
+          ))}
+        </select>
       </form>
+
+      <p className="mb-2 text-xs text-[var(--text-muted)]">
+        {courseFilter === 'none'
+          ? '과정 미배정 '
+          : courseFilter
+            ? `${filterCourses.find((c) => c.id === courseFilter)?.name ?? '선택한 과정'} `
+            : ''}
+        총 {total}명
+      </p>
 
       {/* ── 사용자 목록 ── */}
       {isLoading ? (
@@ -701,6 +792,18 @@ export default function AdminUsersPage() {
                     <span>{user.email}</span>
                     <span className="text-[var(--border)]">·</span>
                     <span>응시 {user._count.submissions}회</span>
+                    {user.studentNumber && (
+                      <>
+                        <span className="text-[var(--border)]">·</span>
+                        <span>학번 {user.studentNumber}</span>
+                      </>
+                    )}
+                    {user.ncpAccountId && (
+                      <>
+                        <span className="text-[var(--border)]">·</span>
+                        <span>NCP {user.ncpAccountId}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -709,6 +812,9 @@ export default function AdminUsersPage() {
               <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-3 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
                 <Button variant="secondary" size="sm" onClick={() => openCourseModal(user)}>
                   과정 배정
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => openProfileModal(user)}>
+                  정보 수정
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => { setPwResetTarget(user); setPwResetValue(''); setPwResetError(null); }}>
                   비번 초기화
@@ -762,6 +868,47 @@ export default function AdminUsersPage() {
         onCancel={() => setShowBulkDeleteConfirm(false)}
         isLoading={isBulkDeleting}
       />
+
+      {/* ── 사용자 정보 수정 모달 (이름 / 학번 / NCP 실습 계정) ── */}
+      {profileTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !isSavingProfile && setProfileTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+            <div className="border-b border-[var(--border-subtle)] px-5 py-4">
+              <p className="font-semibold text-[var(--text-primary)]">사용자 정보 수정</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">{profileTarget.email}</p>
+            </div>
+            <div className="flex flex-col gap-3 px-5 py-4">
+              <Input
+                label="이름"
+                value={profileForm.name}
+                onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                autoFocus
+              />
+              <Input
+                label="학번"
+                value={profileForm.studentNumber}
+                onChange={(e) => setProfileForm({ ...profileForm, studentNumber: e.target.value })}
+                placeholder="ID 찾기(이름+학번)에 사용됩니다"
+              />
+              <Input
+                label="NCP 실습 계정 ID"
+                value={profileForm.ncpAccountId}
+                onChange={(e) => setProfileForm({ ...profileForm, ncpAccountId: e.target.value })}
+                placeholder="이 과정에서 배부한 네이버클라우드 계정 ID"
+              />
+              <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">
+                학번·NCP 계정을 비우면 해당 값이 삭제됩니다. 입력한 값은 로그인 화면의 &quot;ID 찾기&quot;에서 본인에게 그대로 노출됩니다.
+              </p>
+              {profileError && <p className="text-xs text-[var(--danger-text)]">{profileError}</p>}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-3">
+              <Button variant="ghost" size="sm" onClick={() => setProfileTarget(null)} disabled={isSavingProfile}>취소</Button>
+              <Button variant="primary" size="sm" onClick={handleSaveProfile} isLoading={isSavingProfile}>저장</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 비밀번호 초기화 모달 ── */}
       {pwResetTarget && (

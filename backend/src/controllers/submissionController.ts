@@ -88,33 +88,6 @@ export const getSubmissionById = async (
   }
 };
 
-export const getAllSubmissions = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const submissions = await submissionService.getAllSubmissions();
-    res.json({ success: true, data: submissions });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// GET /submissions/admin/users/:userId — 특정 사용자 응시 현황 (ADMIN)
-export const getSubmissionsByUser = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const data = await submissionService.getSubmissionsByUser(req.params.userId);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-};
-
 // GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
 export const getSubmissionsByExam = async (
   req: AuthRequest,
@@ -138,7 +111,12 @@ export const getUserAssignment = async (
 ): Promise<void> => {
   try {
     const { examId, userId } = req.params;
-    const data = await getAdminUserAssignment(userId, examId);
+    const attemptParam = parseInt(req.query['attemptNo'] as string);
+    const data = await getAdminUserAssignment(
+      userId,
+      examId,
+      Number.isFinite(attemptParam) && attemptParam > 0 ? attemptParam : undefined,
+    );
     res.json({ success: true, data });
   } catch (err) {
     next(err);

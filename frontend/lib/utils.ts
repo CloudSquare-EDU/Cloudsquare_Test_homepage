@@ -41,25 +41,6 @@ export const scoreBg = (score: number | null): string => {
   return 'bg-[var(--danger-bg)]';
 };
 
-// ── 날짜 포맷 ─────────────────────────────────────────────────
-export const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-};
-
-export const formatDateTime = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 // ── datetime-local input 값 변환 ───────────────────────────────
 // <input type="datetime-local">은 "로컬(브라우저 시간대) 벽시계 시각" 문자열을 주고받는다.
 // 서버에서 받은 ISO 문자열(UTC)을 그냥 new Date(iso).toISOString().slice(0,16)로 자르면

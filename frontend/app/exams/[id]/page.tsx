@@ -47,6 +47,24 @@ export default function ExamPage() {
     paused: !isTimerActive,
   });
 
+  // 재응시 시작 — 서버가 새 회차 문제를 랜덤 추첨해서 내려준다 (이전 회차 기록은 그대로 보관됨)
+  const beginRetake = async () => {
+    setErrorMsg(null);
+    setPhase('loading');
+    try {
+      const newExam = await examsApi.startRetake(id);
+      setExam(newExam);
+      setExistingSubmission(null);
+      // 재응시 도중 나갔다 돌아온 경우를 위해 임시 저장 답안 복원 (제출하면 삭제되므로 이전 회차 답안은 남아있지 않음)
+      const saved = localStorage.getItem(DRAFT_KEY);
+      setAnswers(saved ? (() => { try { return JSON.parse(saved); } catch { return {}; } })() : {});
+      setPhase('intro');
+    } catch (err) {
+      setErrorMsg(err instanceof ApiError ? err.message : '재응시를 시작하지 못했습니다.');
+      setPhase('already-done');
+    }
+  };
+
   // 데이터 로드
   useEffect(() => {
     const load = async () => {
@@ -58,6 +76,12 @@ export default function ExamPage() {
         setExam(examData);
         if (prevSub) {
           setExistingSubmission(prevSub);
+          // 홈 목록의 "다시 응시" 버튼으로 들어온 경우(?retake=1)에는 안내 화면 없이 바로 재응시 시작
+          const wantsRetake = new URLSearchParams(window.location.search).get('retake') === '1';
+          if (wantsRetake && prevSub.canRetake) {
+            await beginRetake();
+            return;
+          }
           setPhase('already-done');
         } else {
           // localStorage에서 임시 저장된 답안 복원
@@ -164,9 +188,12 @@ export default function ExamPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--success-bg)] text-2xl">
             ✓
           </div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">이미 응시한 시험입니다</h2>
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">
+            {existingSubmission.canRetake ? '응시 기록이 있습니다' : '이미 응시한 시험입니다'}
+          </h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">{exam.title}</p>
           <p className="mt-1 text-xs text-[var(--text-faint)]">
+            {existingSubmission.attemptNo && existingSubmission.attemptNo > 1 ? `${existingSubmission.attemptNo}회차 · ` : ''}
             {new Date(existingSubmission.submittedAt).toLocaleDateString('ko-KR')} 응시
           </p>
           {existingSubmission.resultHidden ? (
@@ -177,14 +204,24 @@ export default function ExamPage() {
             <p className="mt-4 text-3xl font-black text-[var(--success-text)]">{existingSubmission.score}<span className="text-base font-normal text-[var(--text-muted)]">점</span></p>
           )}
           <div className="mt-5 flex flex-col gap-2">
+            {existingSubmission.canRetake && (
+              <Button className="w-full" onClick={beginRetake}>다시 응시</Button>
+            )}
             <Link href={`/submissions/${existingSubmission.id}`}>
-              <Button className="w-full">결과 상세 보기</Button>
+              <Button variant={existingSubmission.canRetake ? 'secondary' : 'primary'} className="w-full">결과 상세 보기</Button>
             </Link>
             <Link href="/">
               <Button variant="ghost" className="w-full">시험 목록으로</Button>
             </Link>
           </div>
-          <p className="mt-3 text-xs text-[var(--text-faint)]">재응시는 관리자에게 문의하세요</p>
+          {errorMsg && (
+            <p className="mt-3 text-xs text-[var(--danger-text)]">{errorMsg}</p>
+          )}
+          <p className="mt-3 text-xs text-[var(--text-faint)]">
+            {existingSubmission.canRetake
+              ? '다시 응시하면 문제가 새로 랜덤 출제되며, 이전 응시 기록은 그대로 보관됩니다'
+              : '재응시는 관리자에게 문의하세요'}
+          </p>
         </div>
       </div>
     );

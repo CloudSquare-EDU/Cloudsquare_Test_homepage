@@ -3,12 +3,13 @@
 // 설계 포인트:
 //   - 수동 문제 시험: Question/Choice 기반 채점 (기존)
 //   - 문제은행 시험: BankQuestion/BankChoice 기반 채점 (신규)
-//   - 동일 시험 중복 응시 차단 (관리자가 reset하기 전까지 재응시 불가)
-//   - 재응시 시 UserExamQuestion도 함께 초기화
+//   - 동일 시험 중복 응시 차단 — 단, 자기주도학습 시험 + 과정의 재응시 허용(allowRetake)일 때는 회차(attemptNo)를 올려 재응시 가능
+//   - 재응시는 회차마다 새로 랜덤 추첨하고 이전 회차 기록/문제 세트를 모두 보관 (관리자 reset은 해당 회차만 삭제)
 
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode } from '../types';
+import { getLatestAttemptNo, isRetakeAllowed, resetAssignment } from './userExamAssignmentService';
 
 interface AnswerInput {
   questionId: string;
@@ -61,17 +62,22 @@ export const submitExam = async (input: SubmitInput) => {
   // (운영진만 결과를 확인할 수 있어야 하므로 — 제출 직후 응답에도 노출되면 안 됨)
   const isRealExam = exam.examType === 'REAL_EXAM';
 
-  // 3. 중복 응시 차단
-  const existingSubmission = await prisma.submission.findFirst({ where: { userId, examId } });
-  if (existingSubmission) {
+  // 3. 응시 회차 결정 + 중복 응시 차단
+  //    - 응시 기록이 없으면 1회차
+  //    - 응시 기록이 있으면 "자기주도학습 시험 + 과정 재응시 허용"일 때만 다음 회차로 응시 가능
+  //      (실제시험이거나 재응시 불허 과정이면 기존처럼 차단 — 재응시는 관리자가 기록을 초기화해야 가능)
+  const latestAttemptNo = await getLatestAttemptNo(userId, examId);
+  if (latestAttemptNo > 0 && !(await isRetakeAllowed(userId, examId))) {
     throw new AppError(409, ErrorCode.CONFLICT, '이미 응시한 시험입니다. 재응시하려면 관리자에게 문의하세요.');
   }
+  const attemptNo = latestAttemptNo + 1;
 
   // ── 문제은행 기반 채점 ────────────────────────────────────────
   if (isBankBased) {
     // 사용자에게 배정된 bankQuestionId 목록 확인
+    // (이번 회차에 배정된 문제만 — 재응시는 회차마다 새로 추첨된 세트를 사용)
     const assigned = await prisma.userExamQuestion.findMany({
-      where: { userId, examId },
+      where: { userId, examId, attemptNo },
       include: {
         bankQuestion: { include: { choices: true } },
       },
@@ -126,7 +132,7 @@ export const submitExam = async (input: SubmitInput) => {
     const submission = await prisma.$transaction(async (tx) => {
       return tx.submission.create({
         data: {
-          userId, examId, score, totalQuestions,
+          userId, examId, score, totalQuestions, attemptNo,
           answers: {
             create: gradedAnswerRecords.map((a) => ({
               bankQuestionId: a.bankQuestionId,
@@ -200,7 +206,7 @@ export const submitExam = async (input: SubmitInput) => {
   const submission = await prisma.$transaction(async (tx) => {
     return tx.submission.create({
       data: {
-        userId, examId, score, totalQuestions,
+        userId, examId, score, totalQuestions, attemptNo,
         answers: {
           create: gradedAnswerRecords.map((a) => ({
             questionId: a.questionId,
@@ -243,12 +249,15 @@ export const submitExam = async (input: SubmitInput) => {
 // 설계 이유: 시험 응시 페이지 진입 시 기존에는 전체 submission 목록을 내려받아 클라이언트에서 filter했으나,
 //   이 엔드포인트로 단건 DB 조회만 수행 → 응시 이력이 많아도 일정한 속도 유지
 export const checkMySubmissionForExam = async (userId: string, examId: string) => {
+  // 재응시가 있으면 가장 최근 회차의 기록을 돌려준다
   const submission = await prisma.submission.findFirst({
     where: { userId, examId },
+    orderBy: [{ attemptNo: 'desc' }, { submittedAt: 'desc' }],
     select: {
       id: true,
       score: true,
       totalQuestions: true,
+      attemptNo: true,
       submittedAt: true,
       exam: { select: { id: true, title: true, examType: true } },
     },
@@ -257,7 +266,9 @@ export const checkMySubmissionForExam = async (userId: string, examId: string) =
 
   // 실제시험(REAL_EXAM)은 본인에게도 점수를 노출하지 않는다 (운영진만 확인 가능)
   const resultHidden = submission.exam.examType === 'REAL_EXAM';
-  return { ...submission, score: resultHidden ? null : submission.score, resultHidden };
+  // 재응시 가능 여부 — 프론트가 "다시 응시" 버튼을 보여줄지 결정하는 데 사용
+  const canRetake = await isRetakeAllowed(userId, examId);
+  return { ...submission, score: resultHidden ? null : submission.score, resultHidden, canRetake };
 };
 
 // 내 응시 목록 조회
@@ -366,7 +377,7 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
   if (examDetail?.questionBankId) {
     // 문제은행 기반: 이 수강생에게 배정된 문제 목록 (assignedOrder 순)
     const assigned = await prisma.userExamQuestion.findMany({
-      where: { userId: submission.userId, examId: submission.examId },
+      where: { userId: submission.userId, examId: submission.examId, attemptNo: submission.attemptNo },
       include: { bankQuestion: { include: { choices: { orderBy: { order: 'asc' } } } } },
       orderBy: { assignedOrder: 'asc' },
     });
@@ -416,62 +427,20 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
     ? orderedKeys.map((k) => questionMap.get(k)!).filter(Boolean)
     : Array.from(questionMap.values());
 
+  const attemptCount = await prisma.submission.count({
+    where: { userId: submission.userId, examId: submission.examId },
+  });
+
   return {
     id: submission.id,
     exam: submission.exam,
     score: submission.score,
     totalQuestions: submission.totalQuestions,
+    attemptNo: submission.attemptNo,
+    attemptCount,
     submittedAt: submission.submittedAt,
     questionResults,
     resultHidden: false,
-  };
-};
-
-// 전체 응시 결과 조회 (ADMIN)
-export const getAllSubmissions = async () => {
-  return prisma.submission.findMany({
-    orderBy: { submittedAt: 'desc' },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      exam: { select: { id: true, title: true } },
-    },
-  });
-};
-
-// 특정 사용자의 응시 현황 조회 (ADMIN) — 할당된 시험 + 응시 여부 포함
-export const getSubmissionsByUser = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true },
-  });
-  if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
-
-  const assignments = await prisma.userExam.findMany({
-    where: { userId },
-    include: {
-      exam: { select: { id: true, title: true, duration: true } },
-    },
-  });
-
-  const submissions = await prisma.submission.findMany({
-    where: { userId },
-    select: { id: true, examId: true, score: true, totalQuestions: true, submittedAt: true },
-  });
-
-  const submissionMap = new Map(submissions.map((s) => [s.examId, s]));
-
-  return {
-    user,
-    exams: assignments.map((a) => {
-      const sub = submissionMap.get(a.examId) ?? null;
-      return {
-        examId: a.exam.id,
-        examTitle: a.exam.title,
-        duration: a.exam.duration,
-        submitted: !!sub,
-        submission: sub,
-      };
-    }),
   };
 };
 
@@ -505,11 +474,13 @@ export const getSubmissionsByExam = async (examId: string) => {
   // 주의: Prisma에서 include + select 동시 사용 불가 → select만 사용
   const submissions = await prisma.submission.findMany({
     where: { examId },
+    orderBy: [{ attemptNo: 'asc' }, { submittedAt: 'asc' }],
     select: {
       id: true,
       userId: true,
       score: true,
       totalQuestions: true,
+      attemptNo: true,
       submittedAt: true,
       user: { select: { id: true, name: true, email: true } },
     },
@@ -531,23 +502,41 @@ export const getSubmissionsByExam = async (examId: string) => {
     }
   }
 
-  const submissionMap = new Map(submissions.map((s) => [s.userId, s]));
+  // 사용자별 제출 목록 (회차 오름차순) — 재응시가 있으면 여러 건
+  const submissionsByUser = new Map<string, typeof submissions>();
+  for (const s of submissions) {
+    const list = submissionsByUser.get(s.userId) ?? [];
+    list.push(s);
+    submissionsByUser.set(s.userId, list);
+  }
 
   const users = Array.from(userMap.values()).map((u) => {
-    const sub = submissionMap.get(u.id) ?? null;
+    const userSubs = submissionsByUser.get(u.id) ?? [];
+    const sub = userSubs.length > 0 ? userSubs[userSubs.length - 1] : null; // 가장 최근 회차
     return {
       userId: u.id,
       userName: u.name,
       userEmail: u.email,
       submitted: !!sub,
+      // 대표 기록 = 가장 최근 회차 (기존 화면/대시보드 집계와 호환)
       submission: sub
         ? {
             id: sub.id,
             score: sub.score,
             totalQuestions: sub.totalQuestions,
+            attemptNo: sub.attemptNo,
             submittedAt: sub.submittedAt,
           }
         : null,
+      // 전체 회차 기록 (재응시한 경우 이전 회차도 확인 가능)
+      attemptCount: userSubs.length,
+      attempts: userSubs.map((s) => ({
+        id: s.id,
+        attemptNo: s.attemptNo,
+        score: s.score,
+        totalQuestions: s.totalQuestions,
+        submittedAt: s.submittedAt,
+      })),
     };
   });
 
@@ -566,14 +555,13 @@ export const resetSubmission = async (submissionId: string) => {
   const submission = await prisma.submission.findUnique({ where: { id: submissionId } });
   if (!submission) throw new AppError(404, ErrorCode.NOT_FOUND, '응시 기록을 찾을 수 없습니다.');
 
-  const { resetAssignment } = await import('./userExamAssignmentService');
-
   await prisma.$transaction(async (tx) => {
     // Answer 삭제 → Submission 삭제
     await tx.answer.deleteMany({ where: { submissionId } });
     await tx.submission.delete({ where: { id: submissionId } });
   });
 
-  // 문제은행 배정 초기화 (다음 응시 시 새 문제 랜덤 배정)
-  await resetAssignment(submission.userId, submission.examId);
+  // 문제은행 배정 초기화 — 삭제한 응시 회차의 배정만 지운다 (다른 회차 기록은 보존)
+  // (다음 응시 시 새 문제 랜덤 배정)
+  await resetAssignment(submission.userId, submission.examId, submission.attemptNo);
 };

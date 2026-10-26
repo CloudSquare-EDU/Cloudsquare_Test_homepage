@@ -27,6 +27,7 @@ export interface ExamSummary {
   questionCount: number | null;
   isPublished?: boolean;
   examType: 'SELF_STUDY' | 'REAL_EXAM';
+  canRetake?: boolean; // 자기주도학습 + 과정 재응시 허용일 때 true (수강생 홈 목록에서만 내려옴)
   startDate?: string | null;
   deadline?: string | null;
   createdAt: string;
@@ -62,11 +63,6 @@ export interface ExamDetail {
 }
 
 // ─── Submission ──────────────────────────────────────────────
-export interface AnswerInput {
-  questionId: string;
-  choiceIds: string[]; // 복수 정답 지원 — 단답형이면 길이 1
-}
-
 export interface GradedAnswer {
   questionId: string;
   choiceIds: string[];        // 사용자가 선택한 선택지 ID 목록
@@ -88,6 +84,8 @@ export interface SubmissionSummary {
   score: number | null;
   resultHidden: boolean; // 실제시험(REAL_EXAM) 응시 기록이면 true — score는 항상 null
   totalQuestions: number;
+  attemptNo?: number;    // 응시 회차 (재응시 허용 과정에서 1, 2, 3 …)
+  canRetake?: boolean;   // checkExamById 응답에서만 — 지금 다시 응시할 수 있는지
   submittedAt: string;
   exam: {
     id: string;
@@ -115,6 +113,8 @@ export interface SubmissionDetail {
   score: number | null;
   resultHidden: boolean; // 실제시험(REAL_EXAM)이고 본인(비관리자)이 조회한 경우 true — score/questionResults 비공개
   totalQuestions: number;
+  attemptNo?: number;     // 이 기록의 응시 회차
+  attemptCount?: number;  // 이 시험의 내 전체 응시 횟수
   submittedAt: string;
   questionResults: QuestionResult[];
 }
@@ -125,6 +125,8 @@ export interface ExamWithSubmission extends ExamSummary {
     id: string;
     score: number | null;
     totalQuestions: number;
+    attemptNo?: number;
+    attemptCount?: number; // 재응시 포함 전체 응시 횟수 — 대표 기록(id/score)은 가장 최근 회차
     submittedAt: string;
   } | null;
 }
@@ -164,6 +166,7 @@ export interface CourseSummary {
   createdAt: string;
   isArchived: boolean;
   archivedAt: string | null;
+  allowRetake: boolean; // 자기주도학습 시험 재응시 허용 여부
   _count: { users: number; exams: number };
 }
 
@@ -174,6 +177,7 @@ export interface CourseDetail {
   createdAt: string;
   isArchived: boolean;
   archivedAt: string | null;
+  allowRetake: boolean;
   users: Array<{ id: string; name: string; email: string; role: Role }>;
   exams: Array<{ id: string; title: string; duration: number; isPublished: boolean }>;
 }
@@ -203,34 +207,6 @@ export interface AdminExam extends ExamSummary {
 }
 
 // ─── 관리자 응시 결과 ─────────────────────────────────────────
-export interface AdminSubmissionSummary {
-  id: string;
-  score: number | null;
-  totalQuestions: number;
-  submittedAt: string;
-  user: { id: string; name: string; email: string };
-  exam: { id: string; title: string };
-}
-
-// 특정 사용자의 시험별 응시 현황
-export interface UserExamStatus {
-  examId: string;
-  examTitle: string;
-  duration: number;
-  submitted: boolean;
-  submission: {
-    id: string;
-    score: number | null;
-    totalQuestions: number;
-    submittedAt: string;
-  } | null;
-}
-
-export interface UserSubmissionStatus {
-  user: { id: string; name: string; email: string };
-  exams: UserExamStatus[];
-}
-
 // 관리자용: 사용자별 배정 문제
 export interface AssignedQuestion {
   order: number;
@@ -250,12 +226,23 @@ export interface ExamUserStatus {
   userName: string;
   userEmail: string;
   submitted: boolean;
+  // 대표 기록 = 가장 최근 회차 (점수는 항상 이 값을 기준으로 표시)
   submission: {
     id: string;
     score: number | null;
     totalQuestions: number;
+    attemptNo?: number;
     submittedAt: string;
   } | null;
+  // 재응시를 포함한 전체 회차 기록 (오름차순)
+  attemptCount?: number;
+  attempts?: Array<{
+    id: string;
+    attemptNo: number;
+    score: number | null;
+    totalQuestions: number;
+    submittedAt: string;
+  }>;
 }
 
 export interface ExamSubmissionStatus {

@@ -83,6 +83,15 @@ export const updateCourse = async (id: string, name: string, description?: strin
   });
 };
 
+// ── 재응시 허용 설정 ─────────────────────────────────────────
+// true면 이 과정의 자기주도학습(SELF_STUDY) 시험을 수강생이 여러 번 응시할 수 있다.
+// (실제시험(REAL_EXAM)은 이 설정과 무관하게 항상 1회만 응시)
+export const setCourseRetake = async (id: string, allowRetake: boolean) => {
+  const course = await prisma.course.findUnique({ where: { id } });
+  if (!course) throw new AppError(404, ErrorCode.NOT_FOUND, '과정을 찾을 수 없습니다.');
+  return prisma.course.update({ where: { id }, data: { allowRetake } });
+};
+
 // ── 과정 삭제 (소속 사용자/시험의 courseId는 null로 초기화) ──
 export const deleteCourse = async (id: string) => {
   const course = await prisma.course.findUnique({ where: { id } });

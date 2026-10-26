@@ -13,6 +13,15 @@ const createUserSchema = z.object({
   password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다.'),
   name: z.string().min(1, '이름을 입력해주세요.'),
   role: z.enum(['USER', 'ADMIN']).optional(),
+  studentNumber: z.string().trim().max(50).optional(),
+  ncpAccountId: z.string().trim().max(100).optional(),
+});
+
+const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, '이름을 입력해주세요.').optional(),
+  // 빈 문자열을 보내면 값 삭제
+  studentNumber: z.string().trim().max(50).optional(),
+  ncpAccountId: z.string().trim().max(100).optional(),
 });
 
 const updateRoleSchema = z.object({
@@ -28,7 +37,10 @@ export const getAllUsers = async (
     const page = parseInt(req.query['page'] as string) || 1;
     const limit = parseInt(req.query['limit'] as string) || 20;
     const search = (req.query['search'] as string) || undefined;
-    const result = await userService.getAllUsers({ page, limit, search });
+    const courseId = (req.query['courseId'] as string) || undefined; // 'none' = 과정 미배정
+    const roleParam = req.query['role'] as string | undefined;
+    const role = roleParam === 'USER' || roleParam === 'ADMIN' ? (roleParam as Role) : undefined;
+    const result = await userService.getAllUsers({ page, limit, search, courseId, role });
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -47,6 +59,20 @@ export const createUser = async (
       role: input.role as Role | undefined,
     });
     res.status(201).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateUserProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const input = updateProfileSchema.parse(req.body);
+    const user = await userService.updateUserProfile(req.params.id, input);
+    res.json({ success: true, data: user });
   } catch (err) {
     next(err);
   }
@@ -79,6 +105,9 @@ const bulkCreateUserSchema = z.object({
         role: z.enum(['USER', 'ADMIN']).optional(),
         // 엑셀의 '과정명(선택)' 컬럼 — 있으면 계정 생성과 동시에 서버에서 과정을 매핑한다.
         courseName: z.string().trim().min(1).optional(),
+        // 엑셀의 '학번(선택)', 'NCP 실습계정(선택)' 컬럼 — ID 찾기 기능에서 사용
+        studentNumber: z.string().trim().min(1).max(50).optional(),
+        ncpAccountId: z.string().trim().min(1).max(100).optional(),
       }),
     )
     .min(1, '최소 1명 이상의 사용자가 필요합니다.'),

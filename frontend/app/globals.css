@@ -32,6 +32,7 @@
 
     --warning-bg:   #fefce8;
     --warning-text: #a16207;
+    --warning-border: #fde68a;
   }
 
   /* ── Dark theme ── */
@@ -63,6 +64,7 @@
 
     --warning-bg:   #1e1a0d;
     --warning-text: #facc15;
+    --warning-border: #4d3f12;
   }
 
   html {

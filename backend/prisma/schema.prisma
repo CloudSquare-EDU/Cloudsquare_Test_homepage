@@ -25,6 +25,7 @@ model Course {
   description String?
   isArchived  Boolean   @default(false) // 보관 여부 — 보관 시 관리자 목록/대시보드에서 숨기고 소속 사용자 로그인·응시 차단 (데이터는 삭제하지 않음)
   archivedAt  DateTime?
+  allowRetake Boolean   @default(false) // 자기주도학습(SELF_STUDY) 시험 재응시 허용 여부 — 실제시험(REAL_EXAM)은 이 값과 무관하게 1회만 응시
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -98,13 +99,14 @@ model UserExamQuestion {
   examId         String
   bankQuestionId String
   assignedOrder  Int      // 이 사용자에게 표시될 문제 순서
+  attemptNo      Int      @default(1) // 응시 회차 — 재응시 때마다 새로 추첨하고 이전 회차 배정은 보관
   createdAt      DateTime @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   exam         Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   bankQuestion BankQuestion @relation(fields: [bankQuestionId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, examId, bankQuestionId])
+  @@unique([userId, examId, attemptNo, bankQuestionId])
   @@index([userId, examId])
   @@map("user_exam_questions")
 }
@@ -119,6 +121,8 @@ model User {
   name               String
   role               Role     @default(USER)
   courseId           String?
+  studentNumber      String?  // 학번 — ID 찾기(이름 + 학번 조회)에 사용, 관리자가 입력
+  ncpAccountId       String?  // 해당 과정에서 배부한 네이버클라우드(NCP) 실습 계정 ID — 관리자가 입력
   mustChangePassword Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -129,6 +133,7 @@ model User {
   userExamQuestions UserExamQuestion[]
 
   @@index([courseId])
+  @@index([studentNumber])
   @@map("users")
 }
 
@@ -215,6 +220,7 @@ model Submission {
   examId         String
   score          Int?
   totalQuestions Int
+  attemptNo      Int      @default(1) // 응시 회차 (재응시 허용 과정에서 1, 2, 3 …)
   submittedAt    DateTime @default(now())
   createdAt      DateTime @default(now())
 

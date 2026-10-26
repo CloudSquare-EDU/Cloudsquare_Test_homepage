@@ -93,6 +93,12 @@ export default function HomePage() {
             const isNotStarted = !done && !!exam.startDate && new Date(exam.startDate) > now;
             const isExpired = !done && !isNotStarted && !!exam.deadline && new Date(exam.deadline) < now;
             const isUnavailable = isNotStarted || isExpired;
+            // 재응시: 자기주도학습 + 과정 재응시 허용 + 응시 가능 기간 안일 때만 "다시 응시" 노출
+            const canRetakeNow =
+              done &&
+              exam.canRetake === true &&
+              !(exam.startDate && new Date(exam.startDate) > now) &&
+              !(exam.deadline && new Date(exam.deadline) < now);
 
             return (
               <div
@@ -139,6 +145,7 @@ export default function HomePage() {
                     {done && (
                       <span className="text-[var(--success-text)]">
                         {new Date(submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })} 응시완료
+                        {(submission.attemptCount ?? 1) > 1 && ` · 총 ${submission.attemptCount}회 응시 (최근 기록)`}
                       </span>
                     )}
                   </div>
@@ -169,6 +176,11 @@ export default function HomePage() {
                         <Link href={`/submissions/${submission.id}`}>
                           <Button variant="ghost" size="sm">결과 보기</Button>
                         </Link>
+                        {canRetakeNow && (
+                          <Link href={`/exams/${exam.id}?retake=1`}>
+                            <Button size="sm">다시 응시</Button>
+                          </Link>
+                        )}
                       </>
                     )
                   ) : isExpired ? (

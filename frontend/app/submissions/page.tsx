@@ -64,6 +64,11 @@ export default function SubmissionsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="font-medium text-[var(--text-primary)] truncate">{s.exam.title}</p>
+                  {s.attemptNo && submissions.filter((x) => x.exam.id === s.exam.id).length > 1 && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[rgba(94,106,210,0.1)] text-[#5e6ad2]">
+                      {s.attemptNo}회차
+                    </span>
+                  )}
                   {s.resultHidden && (
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]">
                       결과 비공개

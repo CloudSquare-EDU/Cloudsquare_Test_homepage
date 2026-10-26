@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, clearAuth } = useAuthStore();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -55,6 +55,13 @@ export default function ChangePasswordPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 비밀번호 변경 화면에서도 로그아웃할 수 있어야 한다.
+  // (mustChangePassword 사용자는 AppShell 이 다른 페이지 이동을 막기 때문에, 이 화면에서 빠져나갈 방법이 없었음)
+  const handleLogout = () => {
+    clearAuth();
+    router.replace('/auth/login');
   };
 
   return (
@@ -152,6 +159,16 @@ export default function ChangePasswordPage() {
         <p className="mt-4 text-center text-xs text-[var(--text-faint)]">
           비밀번호 변경 후 자동으로 이동합니다
         </p>
+
+        <div className="mt-3 text-center">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-xs text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text-secondary)] hover:underline"
+          >
+            로그아웃
+          </button>
+        </div>
       </div>
     </div>
   );

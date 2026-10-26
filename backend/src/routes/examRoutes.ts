@@ -17,6 +17,9 @@ examRoutes.get('/', authenticate, examController.getExams);
 // GET /exams/:id — 시험 상세 + 문제 조회 (정답 제외)
 examRoutes.get('/:id', authenticate, examController.getExamById);
 
+// POST /exams/:id/retake — 재응시 시작 (자기주도학습 + 과정 재응시 허용일 때만, 새 문제 랜덤 추첨)
+examRoutes.post('/:id/retake', authenticate, examController.startRetake);
+
 // POST /exams — 시험 생성 (ADMIN 전용)
 examRoutes.post('/', authenticate, requireAdmin, examController.createExam);
 
@@ -26,14 +29,6 @@ examRoutes.patch('/:id', authenticate, requireAdmin, examController.updateExam);
 // DELETE /exams/:id — 시험 삭제 (ADMIN 전용)
 examRoutes.delete('/:id', authenticate, requireAdmin, examController.deleteExam);
 
-// PATCH /exams/:id/publish — 시험 공개 (ADMIN 전용)
-examRoutes.patch('/:id/publish', authenticate, requireAdmin, examController.publishExam);
 
-// GET /exams/:id/users — 시험에 할당된 사용자 목록 (ADMIN 전용)
-examRoutes.get('/:id/users', authenticate, requireAdmin, examController.getAssignedUsers);
 
-// POST /exams/:id/users — 사용자 할당 (ADMIN 전용)
-examRoutes.post('/:id/users', authenticate, requireAdmin, examController.assignUser);
 
-// DELETE /exams/:id/users/:userId — 할당 해제 (ADMIN 전용)
-examRoutes.delete('/:id/users/:userId', authenticate, requireAdmin, examController.removeUser);

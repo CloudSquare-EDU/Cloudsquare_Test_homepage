@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -75,9 +76,15 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-4 text-center text-xs text-[var(--text-faint)]">
-          계정이 없으신 경우 관리자에게 문의하세요
-        </p>
+        <div className="mt-4 text-center text-xs text-[var(--text-faint)]">
+          <p>계정이 없으신 경우 관리자에게 문의하세요</p>
+          <p className="mt-2">
+            ID를 잊으셨나요?{' '}
+            <Link href="/auth/find-id" className="font-medium text-[#5e6ad2] hover:underline">
+              ID 찾기
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

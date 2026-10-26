@@ -10,16 +10,11 @@ export interface UserSummary {
   role: 'USER' | 'ADMIN';
   courseId: string | null;
   course: { id: string; name: string } | null;
+  studentNumber: string | null;
+  ncpAccountId: string | null;
   mustChangePassword: boolean;
   createdAt: string;
   _count: { submissions: number; userExams: number };
-}
-
-export interface AssignedUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'USER' | 'ADMIN';
 }
 
 export interface BulkUserInput {
@@ -28,6 +23,8 @@ export interface BulkUserInput {
   password: string;
   role?: 'USER' | 'ADMIN';
   courseName?: string;
+  studentNumber?: string;
+  ncpAccountId?: string;
 }
 
 export interface BulkUserResult {
@@ -63,18 +60,27 @@ export interface PaginatedResponse<T> {
 
 export const usersApi = {
   // 전체 사용자 목록 (페이지네이션)
-  getAll: (params?: { page?: number; limit?: number; search?: string }) => {
+  // courseId: 특정 과정 ID, 또는 'none' = 과정 미배정 / role: 권한 필터
+  getAll: (params?: { page?: number; limit?: number; search?: string; courseId?: string; role?: 'USER' | 'ADMIN' }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.search) qs.set('search', params.search);
+    if (params?.courseId) qs.set('courseId', params.courseId);
+    if (params?.role) qs.set('role', params.role);
     const query = qs.toString();
     return apiClient.get<PaginatedResponse<UserSummary>>(`/users${query ? `?${query}` : ''}`);
   },
 
   // 사용자 직접 생성
-  create: (data: { email: string; password: string; name: string; role?: 'USER' | 'ADMIN' }) =>
-    apiClient.post<UserSummary>('/users', data),
+  create: (data: {
+    email: string; password: string; name: string; role?: 'USER' | 'ADMIN';
+    studentNumber?: string; ncpAccountId?: string;
+  }) => apiClient.post<UserSummary>('/users', data),
+
+  // 이름/학번/NCP 실습 계정 ID 수정 (빈 문자열을 보내면 값 삭제)
+  updateProfile: (userId: string, data: { name?: string; studentNumber?: string; ncpAccountId?: string }) =>
+    apiClient.patch<UserSummary>(`/users/${userId}/profile`, data),
 
   // 엑셀 일괄 등록 전, 이미 존재하는 이메일 조회 (덮어쓰기 확인용)
   checkExisting: (emails: string[]) =>
@@ -99,22 +105,4 @@ export const usersApi = {
   // 사용자 삭제
   delete: (userId: string) => apiClient.delete(`/users/${userId}`),
 
-  // 시험에 할당된 사용자 목록
-  getByExam: (examId: string) => apiClient.get<AssignedUser[]>(`/exams/${examId}/users`),
-
-  // 시험에 사용자 할당
-  assignToExam: (examId: string, userId: string) =>
-    apiClient.post(`/exams/${examId}/users`, { userId }),
-
-  // 시험에서 사용자 할당 해제
-  removeFromExam: (examId: string, userId: string) =>
-    apiClient.delete(`/exams/${examId}/users/${userId}`),
-
-  // 과정 배정
-  assignCourse: (userId: string, courseId: string) =>
-    apiClient.patch(`/users/${userId}/course`, { courseId }),
-
-  // 과정 해제
-  removeCourse: (userId: string) =>
-    apiClient.delete(`/users/${userId}/course`),
 };

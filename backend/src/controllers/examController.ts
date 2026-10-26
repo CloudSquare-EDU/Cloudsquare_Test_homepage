@@ -5,7 +5,6 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../types';
 import * as examService from '../services/examService';
-import * as userExamService from '../services/userExamService';
 
 const createExamSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요.').max(200),
@@ -66,49 +65,6 @@ export const getExams = async (
   }
 };
 
-// GET /exams/:id/users — 시험에 할당된 사용자 목록 (ADMIN)
-export const getAssignedUsers = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const users = await userExamService.getUsersByExam(req.params.id);
-    res.json({ success: true, data: users });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// POST /exams/:id/users — 사용자 할당 (ADMIN)
-export const assignUser = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const { userId } = req.body;
-    const result = await userExamService.assignUserToExam(req.params.id, userId);
-    res.status(201).json({ success: true, data: result });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// DELETE /exams/:id/users/:userId — 할당 해제 (ADMIN)
-export const removeUser = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    await userExamService.removeUserFromExam(req.params.id, req.params.userId);
-    res.json({ success: true, data: { message: '할당이 해제되었습니다.' } });
-  } catch (err) {
-    next(err);
-  }
-};
-
 export const getExamById = async (
   req: AuthRequest,
   res: Response,
@@ -118,6 +74,20 @@ export const getExamById = async (
     // 문제은행 기반 시험이면 userId 전달 → 배정 문제 반환
     const userId = req.user?.userId;
     const exam = await examService.getExamById(req.params.id, userId);
+    res.json({ success: true, data: exam });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /exams/:id/retake — 재응시 시작: 새 회차 문제를 추첨해서 시험 정보를 반환
+export const startRetake = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const exam = await examService.getExamById(req.params.id, req.user!.userId, { retake: true });
     res.json({ success: true, data: exam });
   } catch (err) {
     next(err);
@@ -173,28 +143,3 @@ export const deleteExam = async (
   }
 };
 
-export const publishExam = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const exam = await examService.publishExam(req.params.id);
-    res.json({ success: true, data: exam });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const unpublishExam = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const exam = await examService.unpublishExam(req.params.id);
-    res.json({ success: true, data: exam });
-  } catch (err) {
-    next(err);
-  }
-};

@@ -5,6 +5,7 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { ErrorCode } from '../types';
+import { getLatestAttemptNo, getOrCreateAssignment, isRetakeAllowed } from './userExamAssignmentService';
 
 interface CreateExamInput {
   title: string;
@@ -35,7 +36,7 @@ interface UpdateExamInput {
 export const getAssignedExamsForUser = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { courseId: true, course: { select: { isArchived: true } } },
+    select: { courseId: true, course: { select: { isArchived: true, allowRetake: true } } },
   });
 
   // 소속 과정이 보관 처리된 경우 시험 목록을 아예 내려주지 않음 (응시/조회 모두 차단)
@@ -50,7 +51,7 @@ export const getAssignedExamsForUser = async (userId: string) => {
       exam: {
         include: {
           _count: { select: { questions: true } },
-          course: { select: { id: true, name: true } },
+          course: { select: { id: true, name: true, allowRetake: true } },
         },
       },
     },
@@ -68,7 +69,7 @@ export const getAssignedExamsForUser = async (userId: string) => {
         },
         include: {
           _count: { select: { questions: true } },
-          course: { select: { id: true, name: true } },
+          course: { select: { id: true, name: true, allowRetake: true } },
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -79,7 +80,7 @@ export const getAssignedExamsForUser = async (userId: string) => {
     createdAt: Date; startDate: Date | null; deadline: Date | null;
     examType: string;
     _count: { questions: number };
-    course: { id: string; name: string } | null;
+    course: { id: string; name: string; allowRetake: boolean } | null;
     questionCount?: number | null;
   }) => ({
     id: exam.id,
@@ -92,6 +93,10 @@ export const getAssignedExamsForUser = async (userId: string) => {
     createdAt: exam.createdAt,
     examType: exam.examType,
     course: exam.course,
+    // 재응시 가능 여부: 자기주도학습 시험 + 과정의 allowRetake (시험에 과정이 없으면 사용자의 과정 기준)
+    canRetake:
+      exam.examType === 'SELF_STUDY' &&
+      (exam.course?.allowRetake ?? user?.course?.allowRetake) === true,
   });
 
   return [
@@ -108,11 +113,15 @@ export const getAssignedExamsWithSubmissions = async (userId: string) => {
     getAssignedExamsForUser(userId),
     prisma.submission.findMany({
       where: { userId },
-      select: { id: true, examId: true, score: true, totalQuestions: true, submittedAt: true },
+      orderBy: [{ attemptNo: 'asc' }, { submittedAt: 'asc' }],
+      select: { id: true, examId: true, score: true, totalQuestions: true, attemptNo: true, submittedAt: true },
     }),
   ]);
 
+  // 재응시가 있으면 가장 최근 회차(마지막)를 대표 기록으로 사용하고, 응시 횟수도 함께 내려준다
   const subMap = new Map(submissions.map((s) => [s.examId, s]));
+  const attemptCountMap = new Map<string, number>();
+  for (const s of submissions) attemptCountMap.set(s.examId, (attemptCountMap.get(s.examId) ?? 0) + 1);
   return exams.map((exam) => {
     const sub = subMap.get(exam.id);
     if (!sub) return { ...exam, submission: null };
@@ -124,6 +133,8 @@ export const getAssignedExamsWithSubmissions = async (userId: string) => {
         id: sub.id,
         score: resultHidden ? null : sub.score,
         totalQuestions: sub.totalQuestions,
+        attemptNo: sub.attemptNo,
+        attemptCount: attemptCountMap.get(exam.id) ?? 1,
         submittedAt: sub.submittedAt,
       },
     };
@@ -156,7 +167,7 @@ export const getAllExams = async (params: {
       orderBy: { title: 'asc' },
       include: {
         _count: { select: { questions: true, submissions: true } },
-        course: { select: { id: true, name: true } },
+        course: { select: { id: true, name: true, allowRetake: true } },
         questionBank: { select: { id: true, name: true, _count: { select: { questions: true } } } },
       },
     }),
@@ -176,7 +187,8 @@ export const getAllExams = async (params: {
 //   - isCorrect는 DB에서 조회하되 클라이언트에는 노출하지 않음 (정답 노출 방지)
 //   - 문제은행 시험: userId가 주어지면 배정된 문제를 assignment 서비스에서 가져옴
 //   - 수동 문제 시험: 기존 방식 유지
-export const getExamById = async (id: string, userId?: string) => {
+// opts.retake: 재응시 시작 — 다음 회차로 새 문제를 추첨해서 내려준다 (자기주도학습 + 과정 allowRetake 일 때만)
+export const getExamById = async (id: string, userId?: string, opts: { retake?: boolean } = {}) => {
   const exam = await prisma.exam.findUnique({
     where: { id },
     include: {
@@ -213,10 +225,21 @@ export const getExamById = async (id: string, userId?: string) => {
     throw new AppError(403, ErrorCode.FORBIDDEN, '응시 기간이 종료된 시험입니다.');
   }
 
+  // 재응시 시작 요청이면 허용 여부를 검증하고 새 회차 번호를 정한다 (첫 응시 전이면 일반 응시와 동일)
+  let retakeAttemptNo: number | undefined;
+  if (opts.retake && userId) {
+    const latestAttemptNo = await getLatestAttemptNo(userId, id);
+    if (latestAttemptNo > 0) {
+      if (!(await isRetakeAllowed(userId, id))) {
+        throw new AppError(403, ErrorCode.FORBIDDEN, '이 시험은 재응시할 수 없습니다. 관리자에게 문의해주세요.');
+      }
+      retakeAttemptNo = latestAttemptNo + 1;
+    }
+  }
+
   // 문제은행 기반 시험: userId가 있으면 배정 문제 로드
   if (exam.questionBankId && userId) {
-    const { getOrCreateAssignment } = await import('./userExamAssignmentService');
-    const assignedQuestions = await getOrCreateAssignment(userId, id);
+    const assignedQuestions = await getOrCreateAssignment(userId, id, retakeAttemptNo);
     return {
       id: exam.id,
       title: exam.title,
@@ -319,31 +342,3 @@ export const deleteExam = async (id: string) => {
   });
 };
 
-// 시험 공개 처리 (ADMIN)
-export const publishExam = async (id: string) => {
-  const exam = await prisma.exam.findUnique({
-    where: { id },
-    include: { _count: { select: { questions: true } } },
-  });
-
-  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
-  if (exam._count.questions === 0) {
-    throw new AppError(400, ErrorCode.BAD_REQUEST, '문제가 없는 시험은 공개할 수 없습니다.');
-  }
-
-  return prisma.exam.update({
-    where: { id },
-    data: { isPublished: true },
-  });
-};
-
-// 시험 비공개 처리 (ADMIN)
-export const unpublishExam = async (id: string) => {
-  const exam = await prisma.exam.findUnique({ where: { id } });
-  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
-
-  return prisma.exam.update({
-    where: { id },
-    data: { isPublished: false },
-  });
-};

@@ -15,13 +15,23 @@ interface CreateUserInput {
   password: string;
   name: string;
   role?: Role;
+  studentNumber?: string;
+  ncpAccountId?: string;
 }
+
+// 빈 문자열/공백은 null 로 정규화 (undefined 는 "변경 없음"을 뜻하므로 그대로 둔다)
+const normalizeOptional = (v: string | null | undefined): string | null | undefined =>
+  v === undefined ? undefined : v === null ? null : v.trim() === '' ? null : v.trim();
 
 // 전체 사용자 목록 조회 (페이지네이션 + 검색 지원)
 export const getAllUsers = async (params: {
   page?: number;
   limit?: number;
   search?: string;
+  // 과정 필터: 특정 과정 ID, 또는 'none' = 과정 미배정 사용자만
+  courseId?: string;
+  // 권한 필터 (대시보드의 "수강생 수" 집계 등에 사용)
+  role?: Role;
 } = {}) => {
   const page = Math.max(1, params.page ?? 1);
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
@@ -35,10 +45,18 @@ export const getAllUsers = async (params: {
         OR: [
           { name: { contains: params.search, mode: 'insensitive' as const } },
           { email: { contains: params.search, mode: 'insensitive' as const } },
+          { studentNumber: { contains: params.search, mode: 'insensitive' as const } },
+          { ncpAccountId: { contains: params.search, mode: 'insensitive' as const } },
         ],
       }
     : null;
-  const where = searchFilter ? { AND: [archivedFilter, searchFilter] } : archivedFilter;
+  const courseFilter = params.courseId
+    ? params.courseId === 'none'
+      ? { courseId: null }
+      : { courseId: params.courseId }
+    : null;
+  const roleFilter = params.role ? { role: params.role } : null;
+  const where = { AND: [archivedFilter, searchFilter, courseFilter, roleFilter].filter((f) => f !== null) as Prisma.UserWhereInput[] };
 
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
@@ -53,6 +71,8 @@ export const getAllUsers = async (params: {
         name: true,
         role: true,
         courseId: true,
+        studentNumber: true,
+        ncpAccountId: true,
         mustChangePassword: true,
         createdAt: true,
         course: { select: { id: true, name: true } },
@@ -73,6 +93,8 @@ export const getAllUsers = async (params: {
 // 관리자가 사용자 계정 직접 생성
 export const createUser = async (input: CreateUserInput) => {
   const { email, password, name, role = Role.USER } = input;
+  const studentNumber = normalizeOptional(input.studentNumber) ?? null;
+  const ncpAccountId = normalizeOptional(input.ncpAccountId) ?? null;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -82,9 +104,65 @@ export const createUser = async (input: CreateUserInput) => {
   const hashedPassword = await bcrypt.hash(password, 12);
 
   return prisma.user.create({
-    data: { email, password: hashedPassword, name, role, mustChangePassword: true },
-    select: { id: true, email: true, name: true, role: true, mustChangePassword: true, createdAt: true },
+    data: { email, password: hashedPassword, name, role, studentNumber, ncpAccountId, mustChangePassword: true },
+    select: {
+      id: true, email: true, name: true, role: true,
+      studentNumber: true, ncpAccountId: true, mustChangePassword: true, createdAt: true,
+    },
   });
+};
+
+// 관리자가 사용자 기본 정보(이름/학번/NCP 실습 계정 ID) 수정
+// - undefined: 변경 없음 / 빈 문자열: 값 삭제(null)
+export const updateUserProfile = async (
+  userId: string,
+  input: { name?: string; studentNumber?: string; ncpAccountId?: string },
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, ErrorCode.NOT_FOUND, '사용자를 찾을 수 없습니다.');
+
+  const data: Prisma.UserUpdateInput = {};
+  const name = input.name?.trim();
+  if (name) data.name = name;
+  const studentNumber = normalizeOptional(input.studentNumber);
+  if (studentNumber !== undefined) data.studentNumber = studentNumber;
+  const ncpAccountId = normalizeOptional(input.ncpAccountId);
+  if (ncpAccountId !== undefined) data.ncpAccountId = ncpAccountId;
+
+  return prisma.user.update({
+    where: { id: userId },
+    data,
+    select: { id: true, email: true, name: true, studentNumber: true, ncpAccountId: true },
+  });
+};
+
+// ID 찾기 (로그인 전 공개 API): 이름 + 학번으로 본인의 계정 정보를 조회
+// - 관리자가 입력한 정보만 돌려준다 (학번이 없는 계정은 애초에 조회되지 않고, NCP 계정은 입력된 경우에만 값이 있음)
+// - 비밀번호는 절대 반환하지 않는다 (해시만 저장되어 있고, 안내는 "관리자에게 슬랙 문의")
+// - 관리자 계정, 보관된 과정 소속 계정은 제외
+// - 같은 사람이 여러 과정을 들었다면 계정이 여러 개이므로 과정별로 여러 건이 반환된다
+export const findAccountsByNameAndStudentNumber = async (name: string, studentNumber: string) => {
+  const users = await prisma.user.findMany({
+    where: {
+      role: Role.USER,
+      name: { equals: name.trim(), mode: 'insensitive' },
+      studentNumber: studentNumber.trim(),
+      OR: [{ courseId: null }, { course: { isArchived: false } }],
+    },
+    select: {
+      email: true,
+      ncpAccountId: true,
+      createdAt: true,
+      course: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return users.map((u) => ({
+    courseName: u.course?.name ?? null,
+    email: u.email,
+    ncpAccountId: u.ncpAccountId,
+  }));
 };
 
 // 사용자 role 변경 (USER → ADMIN 또는 ADMIN → USER)
@@ -142,6 +220,7 @@ interface BulkOptions {
 //
 // overwriteExisting 옵션이 켜져 있으면, 이미 존재하는 이메일은 "기존 계정 갱신"으로 처리한다.
 //  - 이름: 엑셀 값으로 갱신
+//  - 학번/NCP 실습 계정: 엑셀에 값이 있을 때만 갱신
 //  - 과정: 엑셀에 과정명이 있을 때만 변경 (비어 있으면 기존 과정 유지 — 실수로 과정이 풀리지 않도록)
 //  - 비밀번호: overwritePassword가 true일 때만 교체
 //  - 권한(role): 변경하지 않음 (권한 변경은 별도 기능으로만)
@@ -192,6 +271,11 @@ export const bulkCreateUsers = async (
           );
         }
         const data: Prisma.UserUpdateInput = { name: input.name };
+        // 학번 / NCP 계정은 엑셀에 값이 있을 때만 갱신 (비어 있으면 기존 값 유지)
+        const sn = normalizeOptional(input.studentNumber);
+        if (sn) data.studentNumber = sn;
+        const ncp = normalizeOptional(input.ncpAccountId);
+        if (ncp) data.ncpAccountId = ncp;
         if (overwritePassword) {
           data.password = await bcrypt.hash(input.password, 12);
           data.mustChangePassword = true;

@@ -444,13 +444,6 @@ export default function AdminExamsPage() {
                         {exam.course.name}
                       </span>
                     )}
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                      exam.isPublished
-                        ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
-                        : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
-                    }`}>
-                      {exam.isPublished ? '공개' : '비공개'}
-                    </span>
                   </div>
                   {/* 메타 정보 — 모바일에선 줄바꿈 허용 */}
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">

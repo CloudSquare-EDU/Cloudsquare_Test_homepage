@@ -116,25 +116,43 @@ export default function AdminDashboard() {
 
     const loadStats = async () => {
       try {
-        const [examsRes, usersRes, coursesRes] = await Promise.all([
-          examsApi.getAllAdmin({ limit: 200 }),
-          usersApi.getAll({ limit: 200 }),
-          coursesApi.getAll({ limit: 200 }),
-        ]);
+        // 목록 API는 1회 최대 100건이라, 100건을 넘어도 빠지지 않게 페이지를 돌며 전부 가져온다.
+        const fetchAllPages = async <T,>(
+          fetchPage: (page: number) => Promise<{ data: T[]; totalPages: number }>,
+        ): Promise<T[]> => {
+          const all: T[] = [];
+          for (let page = 1; ; page++) {
+            const res = await fetchPage(page);
+            all.push(...res.data);
+            if (page >= res.totalPages) break;
+          }
+          return all;
+        };
 
-        const exams = examsRes.data;
-        const users = usersRes.data;
-        const courseList = coursesRes.data;
+        // 수강생 수는 목록(최대 100건)을 세지 않고 서버가 계산한 total 을 사용한다.
+        const [exams, courseList, userCountRes] = await Promise.all([
+          fetchAllPages((page) => examsApi.getAllAdmin({ page, limit: 100 })),
+          fetchAllPages((page) => coursesApi.getAll({ page, limit: 100 })),
+          usersApi.getAll({ page: 1, limit: 1, role: 'USER' }),
+        ]);
+        const studentCount = userCountRes.total;
 
         setCourses(courseList);
 
-        // 각 시험의 응시 현황 로드
+        // 각 시험의 응시 현황 로드 — 순차 호출하면 시험 수만큼 느려지므로 10개씩 병렬로 조회
         const statuses: Array<{ examId: string; status: ExamSubmissionStatus }> = [];
-        for (const exam of exams) {
-          try {
-            const status = await submissionsApi.getByExam(exam.id);
-            statuses.push({ examId: exam.id, status });
-          } catch { /* 무시 */ }
+        const CHUNK = 10;
+        for (let i = 0; i < exams.length; i += CHUNK) {
+          const results = await Promise.all(
+            exams.slice(i, i + CHUNK).map(async (exam) => {
+              try {
+                return { examId: exam.id, status: await submissionsApi.getByExam(exam.id) };
+              } catch {
+                return null; // 한 시험의 조회 실패가 대시보드 전체를 막지 않도록 무시
+              }
+            }),
+          );
+          for (const r of results) if (r) statuses.push(r);
         }
 
         // 과정별 사용자 수
@@ -143,8 +161,8 @@ export default function AdminDashboard() {
           courseUserCounts[c.id] = c._count.users;
         }
 
-        setRawData({ exams, statuses, userCount: users.filter((u) => u.role === 'USER').length, courseUserCounts });
-        computeStats(exams, statuses, users.filter((u) => u.role === 'USER').length, '');
+        setRawData({ exams, statuses, userCount: studentCount, courseUserCounts });
+        computeStats(exams, statuses, studentCount, '');
       } catch { /* 무시 */ }
       finally { setIsLoading(false); }
     };

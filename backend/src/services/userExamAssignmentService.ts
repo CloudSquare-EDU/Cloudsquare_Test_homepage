@@ -5,7 +5,9 @@
 //   1. 사용자가 시험에 처음 접근하면 getOrCreateAssignment 호출
 //   2. 이미 배정된 문제가 있으면 그대로 반환
 //   3. 없으면 문제은행에서 questionCount개 랜덤 추첨 → UserExamQuestion에 저장
-//   4. 재응시 시 resetAssignment로 기존 배정 삭제 → 다음 접근 시 새로 추첨
+//   4. 재응시(자기주도학습 + 과정 allowRetake)는 attemptNo를 하나 올려 새로 추첨하고,
+//      이전 회차의 문제 세트는 그대로 보관한다 (회차별 결과 화면에서 그때 풀었던 문제를 그대로 보여주기 위함)
+//   5. 관리자가 응시 기록을 초기화(resetSubmission)하면 해당 회차의 배정도 함께 삭제
 
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
@@ -21,8 +23,38 @@ const shuffle = <T>(arr: T[]): T[] => {
   return a;
 };
 
+// 이 사용자의 가장 최근 응시 회차 (응시 기록이 없으면 0)
+export const getLatestAttemptNo = async (userId: string, examId: string): Promise<number> => {
+  const agg = await prisma.submission.aggregate({
+    where: { userId, examId },
+    _max: { attemptNo: true },
+  });
+  return agg._max.attemptNo ?? 0;
+};
+
+// 재응시 허용 여부: 자기주도학습(SELF_STUDY) 시험이고, 시험이 속한 과정(없으면 사용자의 과정)의 allowRetake 가 켜져 있을 때만 허용
+// 실제시험(REAL_EXAM)은 과정 설정과 무관하게 항상 1회만 응시 (재응시는 관리자의 '재응시 허용(기록 초기화)'로만 가능)
+export const isRetakeAllowed = async (userId: string, examId: string): Promise<boolean> => {
+  const [exam, user] = await Promise.all([
+    prisma.exam.findUnique({
+      where: { id: examId },
+      select: { examType: true, course: { select: { allowRetake: true } } },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { course: { select: { allowRetake: true } } },
+    }),
+  ]);
+  if (!exam || exam.examType !== 'SELF_STUDY') return false;
+  return (exam.course?.allowRetake ?? user?.course?.allowRetake) === true;
+};
+
 // 사용자에게 배정된 문제 조회 또는 신규 배정
-export const getOrCreateAssignment = async (userId: string, examId: string) => {
+// attemptNo 를 생략하면 "현재 회차"를 사용한다: 응시 기록이 없으면 1회차, 있으면 가장 최근 응시한 회차
+//   (재응시를 시작할 때만 최근 회차 + 1 을 명시적으로 넘겨 새로 추첨한다)
+export const getOrCreateAssignment = async (userId: string, examId: string, attemptNo?: number) => {
+  const attempt = attemptNo ?? Math.max(1, await getLatestAttemptNo(userId, examId));
+
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     select: {
@@ -39,7 +71,7 @@ export const getOrCreateAssignment = async (userId: string, examId: string) => {
 
   // 이미 배정된 문제가 있으면 그대로 반환
   const existing = await prisma.userExamQuestion.findMany({
-    where: { userId, examId },
+    where: { userId, examId, attemptNo: attempt },
     orderBy: { assignedOrder: 'asc' },
     include: {
       bankQuestion: {
@@ -82,6 +114,7 @@ export const getOrCreateAssignment = async (userId: string, examId: string) => {
     data: pickedWithOrder.map(({ bankQuestionId, assignedOrder }) => ({
       userId,
       examId,
+      attemptNo: attempt,
       bankQuestionId,
       assignedOrder,
     })),
@@ -110,16 +143,27 @@ export const getOrCreateAssignment = async (userId: string, examId: string) => {
   });
 };
 
-// 배정 초기화 (재응시 시 호출)
-// submissionService.resetSubmission에서 함께 호출
-export const resetAssignment = async (userId: string, examId: string) => {
-  await prisma.userExamQuestion.deleteMany({ where: { userId, examId } });
+// 배정 초기화 — submissionService.resetSubmission에서 함께 호출
+// attemptNo 를 주면 그 회차의 배정만 삭제 (다른 회차의 기록은 보존)
+export const resetAssignment = async (userId: string, examId: string, attemptNo?: number) => {
+  await prisma.userExamQuestion.deleteMany({
+    where: { userId, examId, ...(attemptNo !== undefined ? { attemptNo } : {}) },
+  });
 };
 
 // 관리자용: 특정 사용자의 배정 문제 전체 조회 (정답 포함)
-export const getAdminUserAssignment = async (userId: string, examId: string) => {
+// attemptNo 를 생략하면 가장 최근 회차의 배정을 반환
+export const getAdminUserAssignment = async (userId: string, examId: string, attemptNo?: number) => {
+  let attempt = attemptNo;
+  if (attempt === undefined) {
+    const agg = await prisma.userExamQuestion.aggregate({
+      where: { userId, examId },
+      _max: { attemptNo: true },
+    });
+    attempt = agg._max.attemptNo ?? 1;
+  }
   const assigned = await prisma.userExamQuestion.findMany({
-    where: { userId, examId },
+    where: { userId, examId, attemptNo: attempt },
     orderBy: { assignedOrder: 'asc' },
     include: {
       bankQuestion: {
@@ -139,16 +183,4 @@ export const getAdminUserAssignment = async (userId: string, examId: string) => 
       order: c.order,
     })),
   }));
-};
-
-// 특정 사용자의 특정 시험 배정 문제 ID 목록 (채점용)
-export const getAssignedQuestionIds = async (
-  userId: string,
-  examId: string,
-): Promise<string[]> => {
-  const assignments = await prisma.userExamQuestion.findMany({
-    where: { userId, examId },
-    select: { bankQuestionId: true },
-  });
-  return assignments.map((a) => a.bankQuestionId);
 };

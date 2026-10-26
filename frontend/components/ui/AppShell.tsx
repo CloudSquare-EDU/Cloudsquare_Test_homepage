@@ -10,7 +10,7 @@ import { Sidebar } from './Sidebar';
 import { useAuthStore } from '@/lib/store/authStore';
 
 // 이 경로들은 사이드바 없이 전체 화면으로 표시
-const BARE_ROUTES = ['/auth/login', '/auth/register', '/auth/change-password'];
+const BARE_ROUTES = ['/auth/login', '/auth/change-password', '/auth/find-id'];
 
 // /exams/[id] 경로는 시험 집중 모드 (사이드바 없음)
 const isBare = (pathname: string) => {

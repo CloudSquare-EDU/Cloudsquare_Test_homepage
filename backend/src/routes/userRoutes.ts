@@ -22,6 +22,9 @@ userRoutes.post('/bulk', authenticate, requireAdmin, userController.bulkCreateUs
 // PATCH /users/me/password — 본인 비밀번호 변경 (인증 사용자) ← /:id보다 반드시 먼저
 userRoutes.patch('/me/password', authenticate, userController.changeMyPassword);
 
+// PATCH /users/:id/profile — 이름/학번/NCP 실습 계정 ID 수정
+userRoutes.patch('/:id/profile', authenticate, requireAdmin, userController.updateUserProfile);
+
 // PATCH /users/:id/role — role 변경 (USER ↔ ADMIN)
 userRoutes.patch('/:id/role', authenticate, requireAdmin, userController.updateUserRole);
 

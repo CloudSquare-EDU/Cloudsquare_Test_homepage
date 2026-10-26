@@ -21,9 +21,6 @@ submissionRoutes.get(
 // GET /submissions — 내 응시 목록
 submissionRoutes.get('/', authenticate, submissionController.getMySubmissions);
 
-// GET /submissions/admin — 전체 응시 결과 (ADMIN)
-submissionRoutes.get('/admin', authenticate, requireAdmin, submissionController.getAllSubmissions);
-
 // GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
 submissionRoutes.get(
   '/admin/exams/:examId',
@@ -39,14 +36,6 @@ submissionRoutes.get(
   authenticate,
   requireAdmin,
   submissionController.getUserAssignment,
-);
-
-// GET /submissions/admin/users/:userId — 특정 사용자 응시 현황 (ADMIN)
-submissionRoutes.get(
-  '/admin/users/:userId',
-  authenticate,
-  requireAdmin,
-  submissionController.getSubmissionsByUser,
 );
 
 // DELETE /submissions/:id/reset — 재응시 허용 (ADMIN)

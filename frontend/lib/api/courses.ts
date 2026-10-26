@@ -32,6 +32,10 @@ export const coursesApi = {
   delete: (id: string) =>
     apiClient.delete<{ message: string }>(`/courses/${id}`),
 
+  // 재응시 허용 여부 설정 (자기주도학습 시험 한정)
+  setAllowRetake: (id: string, allowRetake: boolean) =>
+    apiClient.patch<CourseSummary>(`/courses/${id}/retake`, { allowRetake }),
+
   // 보관 / 보관 해제
   archive: (id: string) =>
     apiClient.patch<CourseSummary>(`/courses/${id}/archive`, {}),

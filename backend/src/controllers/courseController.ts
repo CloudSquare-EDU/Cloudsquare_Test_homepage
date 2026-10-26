@@ -53,6 +53,15 @@ export const updateCourse = async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 };
 
+// PATCH /courses/:id/retake — 재응시 허용 여부 설정
+export const setCourseRetake = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { allowRetake } = z.object({ allowRetake: z.boolean() }).parse(req.body);
+    const course = await courseService.setCourseRetake(req.params.id, allowRetake);
+    res.json({ success: true, data: course });
+  } catch (e) { next(e); }
+};
+
 // DELETE /courses/:id
 export const deleteCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {

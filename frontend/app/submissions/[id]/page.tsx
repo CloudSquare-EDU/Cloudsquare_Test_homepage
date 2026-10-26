@@ -38,7 +38,7 @@ export default function SubmissionDetailPage() {
     );
   }
 
-  const { questionResults, score, totalQuestions, submittedAt, exam, resultHidden } = submission;
+  const { questionResults, score, totalQuestions, submittedAt, exam, resultHidden, attemptNo, attemptCount } = submission;
 
   // 실제시험(REAL_EXAM): 운영진만 결과를 확인할 수 있으므로 점수/정오표 대신 안내만 표시
   if (resultHidden) {
@@ -94,6 +94,7 @@ export default function SubmissionDetailPage() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-[var(--text-muted)] mb-1">
+            {(attemptCount ?? 1) > 1 && attemptNo ? `${attemptNo}회차 · ` : ''}
             {new Date(submittedAt).toLocaleString('ko-KR')} 제출
           </p>
           <h1 className="text-xl font-semibold text-[var(--text-primary)] break-words">{exam.title}</h1>
