@@ -295,7 +295,8 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
   const submission = await prisma.submission.findUnique({
     where: { id },
     include: {
-      exam: { select: { id: true, title: true, duration: true, examType: true } },
+      exam: { select: { id: true, title: true, duration: true, examType: true, course: { select: { name: true } } } },
+      user: { select: { name: true, email: true, studentNumber: true, course: { select: { name: true } } } },
       answers: {
         include: {
           question: { include: { choices: { orderBy: { order: 'asc' } } } },
@@ -317,7 +318,7 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
   if (!isAdmin && submission.exam.examType === 'REAL_EXAM') {
     return {
       id: submission.id,
-      exam: submission.exam,
+      exam: { id: submission.exam.id, title: submission.exam.title, duration: submission.exam.duration, examType: submission.exam.examType },
       score: null,
       totalQuestions: submission.totalQuestions,
       submittedAt: submission.submittedAt,
@@ -433,7 +434,14 @@ export const getSubmissionById = async (id: string, userId: string, isAdmin: boo
 
   return {
     id: submission.id,
-    exam: submission.exam,
+    exam: { id: submission.exam.id, title: submission.exam.title, duration: submission.exam.duration, examType: submission.exam.examType },
+    // 결과서(PDF) 헤더용 — 응시자 정보와 과정명 (사용자 과정 우선, 없으면 시험의 과정)
+    user: {
+      name: submission.user.name,
+      email: submission.user.email,
+      studentNumber: submission.user.studentNumber,
+      courseName: submission.user.course?.name ?? submission.exam.course?.name ?? null,
+    },
     score: submission.score,
     totalQuestions: submission.totalQuestions,
     attemptNo: submission.attemptNo,

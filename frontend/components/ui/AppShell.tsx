@@ -48,9 +48,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--bg)]">
+    <div className="flex h-screen overflow-hidden bg-[var(--bg)] print:block print:h-auto print:overflow-visible">
       {/* 데스크탑 사이드바 */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex print:hidden">
         <Sidebar />
       </div>
 
@@ -65,7 +65,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
       {/* 모바일 사이드바 슬라이드 */}
       <div
         className={`
-          fixed inset-y-0 left-0 z-50 flex transition-transform duration-200 md:hidden
+          fixed inset-y-0 left-0 z-50 flex transition-transform duration-200 md:hidden print:hidden
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
@@ -73,9 +73,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
       </div>
 
       {/* 메인 콘텐츠 영역 */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden print:block print:overflow-visible">
         {/* 모바일 상단 헤더 */}
-        <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--sidebar-bg)] px-4 py-3 md:hidden">
+        <header className="flex items-center gap-3 print:hidden border-b border-[var(--border-subtle)] bg-[var(--sidebar-bg)] px-4 py-3 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
@@ -94,8 +94,8 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         {/* 페이지 콘텐츠 */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 md:px-8 md:py-8">
+        <main className="flex-1 overflow-y-auto print:overflow-visible">
+          <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 md:px-8 md:py-8 print:max-w-none print:p-0">
             {children}
           </div>
         </main>

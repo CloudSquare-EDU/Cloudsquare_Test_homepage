@@ -18,6 +18,15 @@ import { userRoutes } from './routes/userRoutes';
 export const createApp = (): express.Application => {
   const app = express();
 
+  // ─── 리버스 프록시(nginx) 뒤에서 실제 접속자 IP 인식 ──────────
+  // TRUST_PROXY=1 이면 X-Forwarded-For 의 클라이언트 IP를 req.ip 로 사용한다.
+  // (ID 찾기 횟수 제한이 프록시 IP 하나로 묶이는 문제 방지)
+  // 설정하지 않으면 기존 동작과 동일. 3001 포트가 외부에 직접 열려 있으면 켜지 말 것.
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy) {
+    app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true');
+  }
+
   // ─── Gzip 압축 (응답 크기 50~70% 감소) ──────────────────────
   app.use(compression());
 

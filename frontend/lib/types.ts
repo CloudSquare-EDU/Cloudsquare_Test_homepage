@@ -109,7 +109,8 @@ export interface QuestionResult {
 
 export interface SubmissionDetail {
   id: string;
-  exam: { id: string; title: string; duration: number };
+  exam: { id: string; title: string; duration: number; examType?: 'SELF_STUDY' | 'REAL_EXAM' };
+  user?: { name: string; email: string; studentNumber: string | null; courseName: string | null }; // 관리자 조회 시 결과서 헤더에 사용
   score: number | null;
   resultHidden: boolean; // 실제시험(REAL_EXAM)이고 본인(비관리자)이 조회한 경우 true — score/questionResults 비공개
   totalQuestions: number;

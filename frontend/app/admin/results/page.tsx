@@ -413,6 +413,9 @@ export default function AdminResultsPage() {
                                     <Link href={`/submissions/${userStatus.submission.id}`}>
                                       <Button variant="secondary" size="sm">결과 보기</Button>
                                     </Link>
+                                    <Link href={`/submissions/${userStatus.submission.id}?print=1`} target="_blank">
+                                      <Button variant="ghost" size="sm">PDF</Button>
+                                    </Link>
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -461,9 +464,14 @@ export default function AdminResultsPage() {
                                           {new Date(a.submittedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                       </div>
-                                      <Link href={`/submissions/${a.id}`}>
-                                        <Button variant="ghost" size="sm">결과 보기</Button>
-                                      </Link>
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        <Link href={`/submissions/${a.id}`}>
+                                          <Button variant="ghost" size="sm">결과 보기</Button>
+                                        </Link>
+                                        <Link href={`/submissions/${a.id}?print=1`} target="_blank">
+                                          <Button variant="ghost" size="sm">PDF</Button>
+                                        </Link>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
