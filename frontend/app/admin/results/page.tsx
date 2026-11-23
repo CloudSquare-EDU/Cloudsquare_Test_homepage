@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { ApiError } from '@/lib/api/client';
 import { formatDuration, scoreColor } from '@/lib/utils';
+import { downloadResultPdfById, downloadExamResultsZip } from '@/lib/resultPdf';
 
 const PAGE_LIMIT = 20;
 
@@ -49,6 +50,40 @@ export default function AdminResultsPage() {
     });
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 결과서 PDF — 개별 다운로드 중인 응시 기록 id / 시험 전체 일괄 저장 진행 상황
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
+  const [bulkPdf, setBulkPdf] = useState<{ examId: string; done: number; total: number } | null>(null);
+
+  const downloadOnePdf = async (submissionId: string) => {
+    setPdfBusyId(submissionId);
+    try {
+      await downloadResultPdfById(submissionId);
+    } catch {
+      setError('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setPdfBusyId(null);
+    }
+  };
+
+  const downloadAllPdf = async (examId: string, examTitle: string, status: ExamSubmissionStatus) => {
+    const targets = status.users
+      .filter((u) => u.submitted && u.submission)
+      .map((u) => ({ submissionId: u.submission!.id, userName: u.userName }));
+    if (targets.length === 0) return;
+    setError(null);
+    setBulkPdf({ examId, done: 0, total: targets.length });
+    try {
+      const { failed } = await downloadExamResultsZip(examTitle, targets, (done, total) =>
+        setBulkPdf({ examId, done, total }),
+      );
+      if (failed.length > 0) setError(`결과서를 만들지 못한 학생이 있습니다 (ZIP에서 제외): ${failed.join(', ')}`);
+    } catch {
+      setError('PDF 일괄 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBulkPdf(null);
+    }
+  };
 
   // 필터/정렬
   type FilterMode = 'all' | 'submitted' | 'not_submitted';
@@ -275,7 +310,7 @@ export default function AdminResultsPage() {
                     ) : (
                       <>
                         {/* 요약 바 */}
-                        <div className="flex items-center gap-5 border-b border-[var(--border-subtle)] bg-[var(--bg-inset)] px-5 py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--border-subtle)] bg-[var(--bg-inset)] px-5 py-2.5">
                           <div className="flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                             <span className="text-xs text-[var(--text-muted)]">
@@ -302,16 +337,30 @@ export default function AdminResultsPage() {
                               점
                             </div>
                           )}
-                          <button
-                            onClick={() => exportToExcel(exam.title, status)}
-                            className="ml-auto flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
-                          >
-                            <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                              <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
-                            </svg>
-                            엑셀 저장
-                          </button>
+                          <div className="ml-auto flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => exportToExcel(exam.title, status)}
+                              className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
+                              </svg>
+                              엑셀 저장
+                            </button>
+                            <button
+                              onClick={() => downloadAllPdf(exam.id, exam.title, status)}
+                              disabled={bulkPdf !== null || !status.users.some((u) => u.submitted)}
+                              title="응시한 학생 전원의 결과서를 학생별 PDF 파일로 만들어 ZIP 하나로 저장합니다 (재응시한 학생은 최근 회차 기준)"
+                              className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
+                              </svg>
+                              {bulkPdf?.examId === exam.id ? `PDF 생성 중 ${bulkPdf.done}/${bulkPdf.total}` : 'PDF 일괄 저장'}
+                            </button>
+                          </div>
                         </div>
 
                         {/* 필터/정렬 바 */}
@@ -386,10 +435,10 @@ export default function AdminResultsPage() {
                               </div>
 
                               {/* 액션 영역: 모바일-하단분리 / 데스크탑-우측인라인 */}
-                              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-2.5 md:mt-0 md:border-t-0 md:pt-0 md:shrink-0">
+                              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[var(--border-subtle)] pt-2.5 md:mt-0 md:gap-2 md:border-t-0 md:pt-0 md:shrink-0">
                                 {userStatus.submitted && userStatus.submission ? (
                                   <>
-                                    <span className="text-xs text-[var(--text-faint)] md:mr-1">
+                                    <span className="w-full text-xs text-[var(--text-faint)] md:mr-1 md:w-auto">
                                       {new Date(userStatus.submission.submittedAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
                                       {' '}
                                       {new Date(userStatus.submission.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
@@ -413,9 +462,15 @@ export default function AdminResultsPage() {
                                     <Link href={`/submissions/${userStatus.submission.id}`}>
                                       <Button variant="secondary" size="sm">결과 보기</Button>
                                     </Link>
-                                    <Link href={`/submissions/${userStatus.submission.id}?print=1`} target="_blank">
-                                      <Button variant="ghost" size="sm">PDF</Button>
-                                    </Link>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      isLoading={pdfBusyId === userStatus.submission.id}
+                                      disabled={pdfBusyId !== null}
+                                      onClick={() => downloadOnePdf(userStatus.submission!.id)}
+                                    >
+                                      PDF
+                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -468,9 +523,15 @@ export default function AdminResultsPage() {
                                         <Link href={`/submissions/${a.id}`}>
                                           <Button variant="ghost" size="sm">결과 보기</Button>
                                         </Link>
-                                        <Link href={`/submissions/${a.id}?print=1`} target="_blank">
-                                          <Button variant="ghost" size="sm">PDF</Button>
-                                        </Link>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          isLoading={pdfBusyId === a.id}
+                                          disabled={pdfBusyId !== null}
+                                          onClick={() => downloadOnePdf(a.id)}
+                                        >
+                                          PDF
+                                        </Button>
                                       </div>
                                     </div>
                                   ))}

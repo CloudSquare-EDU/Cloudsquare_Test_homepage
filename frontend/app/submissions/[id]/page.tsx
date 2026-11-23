@@ -8,6 +8,7 @@ import { submissionsApi } from '@/lib/api/submissions';
 import { SubmissionDetail } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/lib/store/authStore';
+import { downloadResultPdf } from '@/lib/resultPdf';
 
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,7 @@ export default function SubmissionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isAdmin = useAuthStore((st) => st.user?.role === 'ADMIN');
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     submissionsApi
@@ -24,18 +26,14 @@ export default function SubmissionDetailPage() {
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  // PDF 저장: 브라우저 인쇄 → "PDF로 저장". 문서 제목이 기본 파일명이 된다.
-  // 관리자 결과 목록의 "PDF" 버튼은 ?print=1 로 열어 인쇄 창을 자동으로 띄운다.
+  // 브라우저 인쇄(Ctrl+P)로 저장할 때 기본 파일명이 되도록 문서 제목 설정
   useEffect(() => {
     if (!submission || submission.resultHidden) return;
     const prevTitle = document.title;
     const who = submission.user?.name ? `_${submission.user.name}` : '';
     const nth = (submission.attemptCount ?? 1) > 1 && submission.attemptNo ? `_${submission.attemptNo}회차` : '';
     document.title = `${submission.exam.title}${who}${nth}_결과`;
-    const auto = new URLSearchParams(window.location.search).get('print') === '1';
-    const timer = auto ? setTimeout(() => window.print(), 500) : undefined;
     return () => {
-      if (timer) clearTimeout(timer);
       document.title = prevTitle;
     };
   }, [submission]);
@@ -155,7 +153,22 @@ export default function SubmissionDetailPage() {
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
           {isAdmin && (
-            <Button variant="secondary" size="sm" onClick={() => window.print()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={pdfBusy}
+              disabled={pdfBusy}
+              onClick={async () => {
+                setPdfBusy(true);
+                try {
+                  await downloadResultPdf(submission);
+                } catch {
+                  window.alert('PDF 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+                } finally {
+                  setPdfBusy(false);
+                }
+              }}
+            >
               PDF 저장
             </Button>
           )}
