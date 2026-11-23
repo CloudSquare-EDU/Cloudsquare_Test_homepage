@@ -88,6 +88,20 @@ export const getSubmissionById = async (
   }
 };
 
+// GET /submissions/admin/exams/:examId/question-stats — 문제별 정답률 (ADMIN)
+export const getExamQuestionStats = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = await submissionService.getExamQuestionStats(req.params.examId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
 export const getSubmissionsByExam = async (
   req: AuthRequest,

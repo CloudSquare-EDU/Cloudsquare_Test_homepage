@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { examsApi } from '@/lib/api/exams';
 import { submissionsApi } from '@/lib/api/submissions';
-import { AdminExam, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion } from '@/lib/types';
+import { AdminExam, ExamSubmissionStatus, ExamUserStatus, AssignedQuestion, ExamQuestionStats } from '@/lib/types';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -54,11 +54,57 @@ export default function AdminResultsPage() {
   // 결과서 PDF — 개별 다운로드 중인 응시 기록 id / 시험 전체 일괄 저장 진행 상황
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   const [bulkPdf, setBulkPdf] = useState<{ examId: string; done: number; total: number } | null>(null);
+  const [pdfWithStats, setPdfWithStats] = useState(false); // PDF에 문제별 전체 정답률 포함 여부
 
-  const downloadOnePdf = async (submissionId: string) => {
+  // 문제별 정답률 — 시험별로 한 번 불러와 재사용
+  const [statsCache, setStatsCache] = useState<Record<string, ExamQuestionStats>>({});
+  const [statsModal, setStatsModal] = useState<{ examId: string; examTitle: string } | null>(null);
+  const [statsSort, setStatsSort] = useState<'wrong' | 'order'>('wrong');
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  const loadStats = async (examId: string): Promise<ExamQuestionStats> => {
+    if (statsCache[examId]) return statsCache[examId];
+    const data = await submissionsApi.getQuestionStats(examId);
+    setStatsCache((prev) => ({ ...prev, [examId]: data }));
+    return data;
+  };
+
+  const openStats = async (examId: string, examTitle: string) => {
+    setStatsModal({ examId, examTitle });
+    if (statsCache[examId]) return;
+    setStatsLoading(true);
+    try {
+      await loadStats(examId);
+    } catch {
+      setStatsModal(null);
+      setError('문제별 정답률을 불러오는 데 실패했습니다.');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const exportStatsToExcel = (examTitle: string, stats: ExamQuestionStats) => {
+    const rows = stats.questions.map((q) => ({
+      번호: q.order,
+      문제: q.content,
+      응시인원: q.total,
+      정답: q.correct,
+      오답: q.wrong,
+      미응답: q.unanswered,
+      '정답률(%)': q.correctRate,
+      '오답률(%)': 100 - q.correctRate,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 6 }, { wch: 70 }, { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 7 }, { wch: 9 }, { wch: 9 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '문제별정답률');
+    XLSX.writeFile(wb, `${examTitle}_문제별정답률.xlsx`);
+  };
+
+  const downloadOnePdf = async (submissionId: string, examId: string) => {
     setPdfBusyId(submissionId);
     try {
-      await downloadResultPdfById(submissionId);
+      await downloadResultPdfById(submissionId, pdfWithStats ? await loadStats(examId) : undefined);
     } catch {
       setError('PDF 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
@@ -74,8 +120,12 @@ export default function AdminResultsPage() {
     setError(null);
     setBulkPdf({ examId, done: 0, total: targets.length });
     try {
-      const { failed } = await downloadExamResultsZip(examTitle, targets, (done, total) =>
-        setBulkPdf({ examId, done, total }),
+      const stats = pdfWithStats ? await loadStats(examId) : undefined;
+      const { failed } = await downloadExamResultsZip(
+        examTitle,
+        targets,
+        (done, total) => setBulkPdf({ examId, done, total }),
+        stats,
       );
       if (failed.length > 0) setError(`결과서를 만들지 못한 학생이 있습니다 (ZIP에서 제외): ${failed.join(', ')}`);
     } catch {
@@ -339,6 +389,16 @@ export default function AdminResultsPage() {
                           )}
                           <div className="ml-auto flex flex-wrap items-center gap-2">
                             <button
+                              onClick={() => openStats(exam.id, exam.title)}
+                              disabled={!status.users.some((u) => u.submitted)}
+                              className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M3 13V8M8 13V3M13 13v-7" strokeLinecap="round" />
+                              </svg>
+                              문제별 정답률
+                            </button>
+                            <button
                               onClick={() => exportToExcel(exam.title, status)}
                               className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
                             >
@@ -360,6 +420,18 @@ export default function AdminResultsPage() {
                               </svg>
                               {bulkPdf?.examId === exam.id ? `PDF 생성 중 ${bulkPdf.done}/${bulkPdf.total}` : 'PDF 일괄 저장'}
                             </button>
+                            <label
+                              className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-[var(--text-secondary)]"
+                              title="체크하면 PDF의 문제마다 전체 응시자 정답률을 함께 표시합니다 (개별 PDF·일괄 저장 모두 적용)"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={pdfWithStats}
+                                onChange={(e) => setPdfWithStats(e.target.checked)}
+                                className="h-3.5 w-3.5 accent-[#5e6ad2]"
+                              />
+                              PDF에 정답률 포함
+                            </label>
                           </div>
                         </div>
 
@@ -467,7 +539,7 @@ export default function AdminResultsPage() {
                                       size="sm"
                                       isLoading={pdfBusyId === userStatus.submission.id}
                                       disabled={pdfBusyId !== null}
-                                      onClick={() => downloadOnePdf(userStatus.submission!.id)}
+                                      onClick={() => downloadOnePdf(userStatus.submission!.id, exam.id)}
                                     >
                                       PDF
                                     </Button>
@@ -528,7 +600,7 @@ export default function AdminResultsPage() {
                                           size="sm"
                                           isLoading={pdfBusyId === a.id}
                                           disabled={pdfBusyId !== null}
-                                          onClick={() => downloadOnePdf(a.id)}
+                                          onClick={() => downloadOnePdf(a.id, exam.id)}
                                         >
                                           PDF
                                         </Button>
@@ -580,6 +652,97 @@ export default function AdminResultsPage() {
       />
 
       {/* 배정 문제 목록 모달 */}
+      {/* 문제별 정답률 모달 */}
+      {statsModal && (() => {
+        const stats = statsCache[statsModal.examId];
+        const list = stats
+          ? [...stats.questions].sort((a, b) =>
+              statsSort === 'wrong' ? a.correctRate - b.correctRate || a.order - b.order : a.order - b.order,
+            )
+          : [];
+        const rateColor = (r: number) =>
+          r >= 80 ? 'var(--success-text)' : r >= 50 ? 'var(--warning-text)' : 'var(--danger-text)';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setStatsModal(null)} />
+            <div className="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-5 py-4">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[var(--text-primary)]">문제별 정답률</p>
+                  <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+                    {statsModal.examTitle}
+                    {stats && ` · 응시자 ${stats.participants}명 기준 (재응시는 최근 회차)`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStatsModal(null)}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-faint)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)]"
+                  aria-label="닫기"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {stats && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-inset)] px-5 py-2">
+                  <select
+                    value={statsSort}
+                    onChange={(e) => setStatsSort(e.target.value as 'wrong' | 'order')}
+                    className="h-7 rounded border border-[var(--border)] bg-[var(--bg-surface)] px-1.5 text-xs text-[var(--text-secondary)] focus:outline-none"
+                  >
+                    <option value="wrong">오답률 높은순</option>
+                    <option value="order">문제 순서</option>
+                  </select>
+                  <span className="text-xs text-[var(--text-faint)]">총 {stats.questions.length}문제</span>
+                  <button
+                    onClick={() => exportStatsToExcel(statsModal.examTitle, stats)}
+                    className="ml-auto flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    엑셀 저장
+                  </button>
+                </div>
+              )}
+
+              <div className="overflow-y-auto">
+                {statsLoading || !stats ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#5e6ad2] border-t-transparent" />
+                  </div>
+                ) : list.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-[var(--text-muted)]">집계할 응시 기록이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-[var(--border-subtle)]">
+                    {list.map((q) => (
+                      <div key={q.key} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:gap-4">
+                        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                          <span className="mt-0.5 w-7 shrink-0 text-right text-xs font-medium text-[var(--text-faint)]">{q.order}</span>
+                          <p className="line-clamp-2 text-sm text-[var(--text-primary)] break-words" title={q.content}>{q.content}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3 pl-9 sm:w-80 sm:pl-0">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg-raised)]">
+                            <div className="h-full rounded-full" style={{ width: `${q.correctRate}%`, background: rateColor(q.correctRate) }} />
+                          </div>
+                          <div className="w-40 shrink-0 text-right">
+                            <p className="text-sm font-semibold" style={{ color: rateColor(q.correctRate) }}>
+                              정답률 {q.correctRate}%
+                            </p>
+                            <p className="whitespace-nowrap text-[11px] text-[var(--text-faint)]">
+                              {q.correct}/{q.total}명 · 오답 {q.wrong}{q.unanswered > 0 ? ` · 미응답 ${q.unanswered}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {assignmentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div

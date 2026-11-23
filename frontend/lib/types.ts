@@ -246,6 +246,23 @@ export interface ExamUserStatus {
   }>;
 }
 
+// 문제별 정답률 (GET /submissions/admin/exams/:examId/question-stats) — 학생별 최근 회차 기준
+export interface QuestionStat {
+  key: string;         // questionId 또는 bankQuestionId (QuestionResult.key 와 같음)
+  order: number;       // 원래 문제 순서 (문제은행 순서 / 시험 문제 순서)
+  content: string;
+  total: number;       // 이 문제를 받은 응시자 수
+  correct: number;
+  wrong: number;
+  unanswered: number;
+  correctRate: number; // 0~100
+}
+
+export interface ExamQuestionStats {
+  participants: number; // 응시 완료 인원
+  questions: QuestionStat[];
+}
+
 export interface ExamSubmissionStatus {
   examId: string;
   examTitle: string;

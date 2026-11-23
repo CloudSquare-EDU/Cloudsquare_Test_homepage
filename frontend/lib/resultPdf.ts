@@ -7,7 +7,7 @@
 
 import type { Content, TDocumentDefinitions, TableCell } from 'pdfmake/interfaces';
 import { submissionsApi } from './api/submissions';
-import { SubmissionDetail } from './types';
+import { ExamQuestionStats, QuestionStat, SubmissionDetail } from './types';
 
 type PdfMake = typeof import('pdfmake/build/pdfmake');
 
@@ -64,7 +64,9 @@ export const resultPdfFileName = (d: SubmissionDetail): string => {
   return `${sanitize(`${who}_${id}_${d.exam.title}${nth}`)}.pdf`;
 };
 
-const buildDoc = (d: SubmissionDetail): TDocumentDefinitions => {
+// stats 를 넘기면 문제마다 '전체 정답률'을 함께 표시한다
+const buildDoc = (d: SubmissionDetail, stats?: ExamQuestionStats): TDocumentDefinitions => {
+  const statMap = new Map<string, QuestionStat>((stats?.questions ?? []).map((s) => [s.key, s]));
   const qs = d.questionResults;
   const correct = qs.filter((q) => q.isCorrect).length;
   const unanswered = qs.filter((q) => q.isAnswered === false).length;
@@ -154,6 +156,12 @@ const buildDoc = (d: SubmissionDetail): TDocumentDefinitions => {
                   { text: '    ' },
                   { text: st.text, bold: true, color: st.color },
                   ...(isMulti ? [{ text: '   ·   복수정답', color: COLOR.accent }] : []),
+                  ...(statMap.has(q.key)
+                    ? [{
+                        text: `   ·   전체 정답률 ${statMap.get(q.key)!.correctRate}% (${statMap.get(q.key)!.correct}/${statMap.get(q.key)!.total}명)`,
+                        color: COLOR.faint,
+                      }]
+                    : []),
                 ],
                 fontSize: 8.5,
                 margin: [0, 0, 0, 3],
@@ -208,7 +216,9 @@ const buildDoc = (d: SubmissionDetail): TDocumentDefinitions => {
         columns: [
           { text: '문제별 결과', bold: true, fontSize: 11, width: 'auto' },
           {
-            text: '● 응시자 선택    ○ 미선택    정답: 초록색 보기    선택 오답: 빨간 취소선',
+            text: `● 응시자 선택    ○ 미선택    정답: 초록색 보기    선택 오답: 빨간 취소선${
+              stats ? `    전체 정답률: 응시자 ${stats.participants}명 기준` : ''
+            }`,
             fontSize: 7.5,
             color: COLOR.faint,
             alignment: 'right',
@@ -223,9 +233,9 @@ const buildDoc = (d: SubmissionDetail): TDocumentDefinitions => {
   };
 };
 
-const createResultPdfBlob = async (d: SubmissionDetail): Promise<Blob> => {
+const createResultPdfBlob = async (d: SubmissionDetail, stats?: ExamQuestionStats): Promise<Blob> => {
   const pdfMake = await loadPdfMake();
-  return pdfMake.createPdf(buildDoc(d)).getBlob();
+  return pdfMake.createPdf(buildDoc(d, stats)).getBlob();
 };
 
 const saveBlob = (blob: Blob, fileName: string) => {
@@ -240,13 +250,13 @@ const saveBlob = (blob: Blob, fileName: string) => {
 };
 
 // 학생 1명 결과서 바로 다운로드
-export const downloadResultPdf = async (d: SubmissionDetail) => {
-  saveBlob(await createResultPdfBlob(d), resultPdfFileName(d));
+export const downloadResultPdf = async (d: SubmissionDetail, stats?: ExamQuestionStats) => {
+  saveBlob(await createResultPdfBlob(d, stats), resultPdfFileName(d));
 };
 
 // 응시 기록 id 로 바로 다운로드 (관리자 응시 결과 목록용)
-export const downloadResultPdfById = async (submissionId: string) => {
-  await downloadResultPdf(await submissionsApi.getById(submissionId));
+export const downloadResultPdfById = async (submissionId: string, stats?: ExamQuestionStats) => {
+  await downloadResultPdf(await submissionsApi.getById(submissionId), stats);
 };
 
 // 시험 전체 결과서를 학생별 PDF 파일로 만들어 ZIP 하나로 저장
@@ -255,6 +265,7 @@ export const downloadExamResultsZip = async (
   examTitle: string,
   targets: Array<{ submissionId: string; userName: string }>,
   onProgress: (done: number, total: number) => void,
+  stats?: ExamQuestionStats,
 ): Promise<{ saved: number; failed: string[] }> => {
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
@@ -270,7 +281,7 @@ export const downloadExamResultsZip = async (
       let name = resultPdfFileName(d);
       for (let n = 2; usedNames.has(name); n++) name = resultPdfFileName(d).replace(/\.pdf$/, `_${n}.pdf`);
       usedNames.add(name);
-      zip.file(name, await createResultPdfBlob(d));
+      zip.file(name, await createResultPdfBlob(d, stats));
       saved++;
     } catch {
       failed.push(t.userName);

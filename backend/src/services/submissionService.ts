@@ -573,3 +573,91 @@ export const resetSubmission = async (submissionId: string) => {
   // (다음 응시 시 새 문제 랜덤 배정)
   await resetAssignment(submission.userId, submission.examId, submission.attemptNo);
 };
+
+// 문제별 정답률 (ADMIN) — 학생별 대표 기록(가장 최근 회차) 기준
+// 문제은행 시험은 학생마다 실제로 출제된 문제만 집계하므로 문제마다 응시 인원(total)이 다를 수 있다
+export const getExamQuestionStats = async (examId: string) => {
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    select: {
+      questionBankId: true,
+      questions: { select: { id: true, content: true, order: true }, orderBy: { order: 'asc' } },
+    },
+  });
+  if (!exam) throw new AppError(404, ErrorCode.NOT_FOUND, '시험을 찾을 수 없습니다.');
+
+  const submissions = await prisma.submission.findMany({
+    where: { examId },
+    orderBy: { attemptNo: 'desc' },
+    select: {
+      userId: true,
+      attemptNo: true,
+      answers: { select: { questionId: true, bankQuestionId: true, isCorrect: true } },
+    },
+  });
+  const latest = new Map<string, (typeof submissions)[number]>();
+  for (const s of submissions) if (!latest.has(s.userId)) latest.set(s.userId, s);
+
+  // 문제은행 시험: 학생별(최근 회차) 출제 문제 목록
+  const assignedByUser = new Map<string, string[]>();
+  if (exam.questionBankId) {
+    const rows = await prisma.userExamQuestion.findMany({
+      where: { examId, userId: { in: [...latest.keys()] } },
+      select: { userId: true, attemptNo: true, bankQuestionId: true },
+    });
+    for (const r of rows) {
+      if (latest.get(r.userId)?.attemptNo !== r.attemptNo) continue;
+      const list = assignedByUser.get(r.userId) ?? [];
+      list.push(r.bankQuestionId);
+      assignedByUser.set(r.userId, list);
+    }
+  }
+  const manualIds = exam.questions.map((q) => q.id);
+
+  const stats = new Map<string, { total: number; correct: number; answered: number }>();
+  for (const [userId, s] of latest) {
+    // 응답한 문제 → 정답 여부 (복수 선택은 보기마다 행이 있으므로 하나라도 정답이면 정답)
+    const result = new Map<string, boolean>();
+    for (const a of s.answers) {
+      const key = a.questionId ?? a.bankQuestionId;
+      if (!key) continue;
+      result.set(key, (result.get(key) ?? false) || a.isCorrect);
+    }
+    const keys = exam.questionBankId ? assignedByUser.get(userId) ?? [...result.keys()] : manualIds;
+    for (const key of keys) {
+      const st = stats.get(key) ?? { total: 0, correct: 0, answered: 0 };
+      st.total++;
+      if (result.has(key)) st.answered++;
+      if (result.get(key)) st.correct++;
+      stats.set(key, st);
+    }
+  }
+
+  // 문제 내용 + 원래 순서(문제은행 순서 / 시험 문제 순서)
+  const contents = exam.questionBankId
+    ? await prisma.bankQuestion.findMany({
+        where: { id: { in: [...stats.keys()] } },
+        select: { id: true, content: true, order: true },
+        orderBy: { order: 'asc' },
+      })
+    : exam.questions;
+
+  return {
+    participants: latest.size,
+    questions: contents
+      .filter((q) => stats.has(q.id))
+      .map((q, idx) => {
+        const st = stats.get(q.id)!;
+        return {
+          key: q.id,
+          order: idx + 1,
+          content: q.content,
+          total: st.total,
+          correct: st.correct,
+          wrong: st.answered - st.correct,
+          unanswered: st.total - st.answered,
+          correctRate: st.total > 0 ? Math.round((st.correct / st.total) * 100) : 0,
+        };
+      }),
+  };
+};

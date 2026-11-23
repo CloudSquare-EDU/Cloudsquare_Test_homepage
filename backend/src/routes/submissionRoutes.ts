@@ -21,6 +21,14 @@ submissionRoutes.get(
 // GET /submissions — 내 응시 목록
 submissionRoutes.get('/', authenticate, submissionController.getMySubmissions);
 
+// GET /submissions/admin/exams/:examId/question-stats — 문제별 정답률 (ADMIN)
+submissionRoutes.get(
+  '/admin/exams/:examId/question-stats',
+  authenticate,
+  requireAdmin,
+  submissionController.getExamQuestionStats,
+);
+
 // GET /submissions/admin/exams/:examId — 특정 시험 응시 현황 (ADMIN)
 submissionRoutes.get(
   '/admin/exams/:examId',

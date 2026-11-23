@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { submissionsApi } from '@/lib/api/submissions';
-import { SubmissionDetail } from '@/lib/types';
+import { ExamQuestionStats, SubmissionDetail } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/lib/store/authStore';
 import { downloadResultPdf } from '@/lib/resultPdf';
@@ -17,6 +17,9 @@ export default function SubmissionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const isAdmin = useAuthStore((st) => st.user?.role === 'ADMIN');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfWithStats, setPdfWithStats] = useState(false);
+  // 관리자: 이 시험의 문제별 전체 정답률 (문제마다 함께 표시)
+  const [stats, setStats] = useState<ExamQuestionStats | null>(null);
 
   useEffect(() => {
     submissionsApi
@@ -25,6 +28,11 @@ export default function SubmissionDetailPage() {
       .catch(() => setError('결과를 불러오는 데 실패했습니다.'))
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!isAdmin || !submission || submission.resultHidden) return;
+    submissionsApi.getQuestionStats(submission.exam.id).then(setStats).catch(() => setStats(null));
+  }, [isAdmin, submission]);
 
   // 브라우저 인쇄(Ctrl+P)로 저장할 때 기본 파일명이 되도록 문서 제목 설정
   useEffect(() => {
@@ -93,6 +101,7 @@ export default function SubmissionDetailPage() {
     );
   }
 
+  const statMap = new Map((stats?.questions ?? []).map((st) => [st.key, st]));
   const correctCount = questionResults.filter((q) => q.isCorrect).length;
   const unansweredCount = questionResults.filter((q) => q.isAnswered === false).length;
   const wrongCount = totalQuestions - correctCount - unansweredCount;
@@ -152,6 +161,17 @@ export default function SubmissionDetailPage() {
           <h1 className="text-xl font-semibold text-[var(--text-primary)] break-words">{exam.title}</h1>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
+          {isAdmin && stats && (
+            <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <input
+                type="checkbox"
+                checked={pdfWithStats}
+                onChange={(e) => setPdfWithStats(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[#5e6ad2]"
+              />
+              정답률 포함
+            </label>
+          )}
           {isAdmin && (
             <Button
               variant="secondary"
@@ -161,7 +181,7 @@ export default function SubmissionDetailPage() {
               onClick={async () => {
                 setPdfBusy(true);
                 try {
-                  await downloadResultPdf(submission);
+                  await downloadResultPdf(submission, pdfWithStats && stats ? stats : undefined);
                 } catch {
                   window.alert('PDF 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
                 } finally {
@@ -227,6 +247,11 @@ export default function SubmissionDetailPage() {
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">문제별 결과</h2>
         <span className="hidden sm:inline text-xs text-[var(--text-faint)] print:hidden">— 정답은 ✓, 내가 선택한 오답은 취소선</span>
         <span className="hidden text-xs text-[var(--text-muted)] print:inline">■ 응시자 선택 · □ 미선택 · ✓ 정답 · ✗ 선택한 오답</span>
+        {stats && (
+          <span className="ml-auto text-xs text-[var(--text-faint)] print:hidden">
+            전체 정답률: 응시자 {stats.participants}명 기준
+          </span>
+        )}
       </div>
       <div className="flex flex-col gap-2">
         {questionResults.map((qr, idx) => {
@@ -263,6 +288,15 @@ export default function SubmissionDetailPage() {
                 <p className="text-sm font-medium text-[var(--text-primary)] break-words">
                   Q{idx + 1}. {qr.content}
                 </p>
+                {statMap.has(qr.key) && (
+                  <span
+                    className="ml-auto shrink-0 whitespace-nowrap rounded bg-[var(--bg-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]"
+                    title={`전체 응시자 ${statMap.get(qr.key)!.total}명 중 ${statMap.get(qr.key)!.correct}명 정답`}
+                  >
+                    정답률 {statMap.get(qr.key)!.correctRate}%
+                    <span className="hidden sm:inline"> ({statMap.get(qr.key)!.correct}/{statMap.get(qr.key)!.total})</span>
+                  </span>
+                )}
               </div>
               <div className="flex flex-col gap-1.5 pl-4">
                 {qr.choices.map((choice) => {
